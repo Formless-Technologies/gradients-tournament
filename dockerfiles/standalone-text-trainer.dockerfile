@@ -64,10 +64,6 @@ RUN pip install debugpy
 RUN pip install cleanlab
 RUN pip install sentence-transformers
 
-
-WORKDIR /workspace
-RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training
-
 # Environment variables for optimal performance
 ENV TOKENIZERS_PARALLELISM=false
 
@@ -79,3 +75,16 @@ ENV TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 ENV NCCL_IB_DISABLE=1
 ENV NCCL_SHARP_DISABLE=1
 
+
+WORKDIR /workspace
+RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training /workspace/scripts
+
+COPY configs/ /workspace/configs
+COPY training/ /workspace/training
+COPY training_helpers/ /workspace/training/training_helpers
+COPY scripts /workspace/scripts
+
+RUN chmod +x /workspace/scripts/run_text_trainer.sh
+RUN chmod +x /workspace/scripts/text_trainer.py
+
+ENTRYPOINT ["/workspace/scripts/run_text_trainer.sh"]
