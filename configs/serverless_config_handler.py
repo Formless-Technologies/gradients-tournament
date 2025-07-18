@@ -34,6 +34,12 @@ DPO_DEFAULT_FIELD_REJECTED = "rejected"
 
 GRPO_DEFAULT_FIELD_PROMPT = "prompt"
 
+class FileFormat(str, Enum):
+    CSV = "csv"  # needs to be local file
+    JSON = "json"  # needs to be local file
+    HF = "hf"  # Hugging Face dataset
+    S3 = "s3"
+
 class TaskType(str, Enum):
     INSTRUCTTEXTTASK = "InstructTextTask"
     IMAGETASK = "ImageTask"
@@ -251,6 +257,9 @@ def _load_and_modify_config(
 
     if config["adapter"] == "lora":
         config = setup_lora_config(config)
+
+    output_dir = f"/workspace/axolotl/outputs/{task_id}/{expected_repo_name}"
+    config["output_dir"] = output_dir
 
     return config
 

@@ -20,7 +20,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
 from configs.serverless_config_handler import setup_config
-from configs.serverless_config_handler import TaskType
+from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 from training.train import run_training
 
@@ -85,114 +85,6 @@ def copy_dataset_if_needed(dataset_path, file_format):
     return dataset_path
 
 
-def create_config(task_id, model, dataset, dataset_type, file_format, output_dir, expected_repo_name=None,
-                huggingface_username=None, huggingface_token=None, disable_upload=True):
-    """Create the axolotl config file with appropriate settings."""
-    if isinstance(dataset_type, InstructTextDatasetType | DpoDatasetType):
-        config_path = "/workspace/axolotl/base.yml"
-    elif isinstance(dataset_type, GrpoDatasetType):
-        config_path = "/workspace/axolotl/base_grpo.yml"
-    else:
-        raise ValueError(f"Unsupported dataset type: {type(dataset_type)}")
-
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
-
-    config["datasets"] = [create_dataset_entry(dataset, dataset_type, FileFormat(file_format))]
-    model_path = f"{train_cst.CACHE_PATH}/{task_id}/models/{model.replace('/', '--')}"
-    config["base_model"] = model_path
-    config["mlflow_experiment_name"] = dataset
-    os.makedirs(output_dir, exist_ok=True)
-    config["output_dir"] = output_dir
-
-    config = update_flash_attention(config, model)
-
-    if isinstance(dataset_type, DpoDatasetType):
-        config["rl"] = "dpo"
-    elif isinstance(dataset_type, GrpoDatasetType):
-        filename, reward_funcs_names = create_reward_funcs_file(
-            [reward_function.reward_func for reward_function in dataset_type.reward_functions],
-            task_id,
-            destination_dir="/workspace/axolotl/src/",
-        )
-        config["trl"]["reward_funcs"] = [f"{filename}.{func_name}" for func_name in reward_funcs_names]
-        config["trl"]["reward_weights"] = [reward_function.reward_weight for reward_function in dataset_type.reward_functions]
-
-    if not disable_upload:
-        hf_username = huggingface_username or os.environ.get("HUGGINGFACE_USERNAME", "rayonlabs")
-        os.environ["HUGGINGFACE_USERNAME"] = hf_username
-
-        repo_name = expected_repo_name or str(uuid.uuid4())
-        config["hub_model_id"] = f"{hf_username}/{repo_name}"
-
-        if huggingface_token:
-            os.environ["HUGGINGFACE_TOKEN"] = huggingface_token
-    else:
-        for key in list(config.keys()):
-            if key.startswith("wandb") or key.startswith("hub"):
-                config.pop(key)
-
-    if file_format != FileFormat.HF.value:
-        for ds in config["datasets"]:
-            ds["ds_type"] = "json"
-
-            if "path" in ds:
-                ds["path"] = "/workspace/axolotl/data"
-
-            ds["data_files"] = [os.path.basename(dataset)]
-
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
-        config["special_tokens"] = {"pad_token": tokenizer.eos_token}
-
-    config_path = os.path.join("/workspace/axolotl/configs", f"{task_id}.yml")
-    save_config(config, config_path)
-    return config_path
-
-
-def run_training(config_path):
-    print(f"Starting training with config: {config_path}", flush=True)
-    """Run the training process using the specified config file."""
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    training_env = os.environ.copy()
-    training_env["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-    training_env["HF_HUB_DISABLE_TELEMETRY"] = "1"
-
-    training_command = [
-    "accelerate", "launch",
-    "-m", "axolotl.cli.train",
-    config_path
-    ]
-
-    try:
-        print("Starting training subprocess...\n", flush=True)
-        process = subprocess.Popen(
-            training_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-
-        for line in process.stdout:
-            print(line, end="", flush=True)
-
-        return_code = process.wait()
-        if return_code != 0:
-            raise subprocess.CalledProcessError(return_code, training_command)
-
-        print("Training subprocess completed successfully.", flush=True)
-
-    except subprocess.CalledProcessError as e:
-        print("Training subprocess failed!", flush=True)
-        print(f"Exit Code: {e.returncode}", flush=True)
-        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
-        raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
-
-
-
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
     parser = argparse.ArgumentParser(description="Text Model Training Script")
@@ -220,16 +112,19 @@ async def main():
     except Exception as e:
         sys.exit(f"Error creating dataset type object: {e}")
 
+    
+
     # Setup correct output directories
     CACHE_PATH = "/cache"
     base_dataset_path = f"{CACHE_PATH}/{args.task_id}/datasets"
-    dataset_path = f"{base_dataset_path}/{args.task_id}_train_data.json"
+    dataset_path = f"{base_dataset_path}/{args.task_id}_train_data.json" if args.file_format == FileFormat.S3.value else f"{base_dataset_path}/{args.dataset.replace('/', '--')}"
+    dataset_path = copy_dataset_if_needed(dataset_path, args.file_format)
 
     # Build Config File
     CONFIG_DIR = "/workspace/configs"
     config_filename = f"{job_id}.yml"
     config_path = os.path.join(CONFIG_DIR, config_filename)
-    setup_config(dataset_path, args.model, dataset_type, args.expected_repo_name)
+    setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name)
 
     # Run Training
     run_training(config_path)
