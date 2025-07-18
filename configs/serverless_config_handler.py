@@ -43,12 +43,6 @@ class TaskType(str, Enum):
 
     def __hash__(self):
         return hash(str(self))
-    
-class FileFormat(str, Enum):
-    CSV = "csv"  # needs to be local file
-    JSON = "json"  # needs to be local file
-    HF = "hf"  # Hugging Face dataset
-    S3 = "s3"
 
 
 class InstructTextDatasetType(BaseModel):
@@ -93,11 +87,11 @@ class DpoDatasetType(BaseModel):
     chosen_format: str | None = "{chosen}"
     rejected_format: str | None = "{rejected}"
 
+TextDatasetType = InstructTextDatasetType | DpoDatasetType | GrpoDatasetType | ChatTemplateDatasetType
 
 def create_dataset_entry(
     dataset: str,
     dataset_type: InstructTextDatasetType | DpoDatasetType | GrpoDatasetType,
-    file_format: FileFormat,
     is_eval: bool = False,
 ) -> dict:
     dataset_entry = {"path": dataset}
@@ -195,10 +189,8 @@ def _load_and_modify_config(
     dataset: str,
     model: str,
     dataset_type: InstructTextDatasetType | DpoDatasetType | GrpoDatasetType,
-    file_format: FileFormat,
     task_id: str,
-    expected_repo_name: str | None,
-    required_finish_time: str,
+    expected_repo_name: str | None
 ) -> dict:
     """
     Loads the config template and modifies it to create a new job config.
@@ -207,7 +199,6 @@ def _load_and_modify_config(
     print("Loading config template")
     with open(CONFIG_TEMPLATE_PATH, "r") as file:
         config = yaml.safe_load(file)
-    config["required_finish_time"] = required_finish_time
 
 
     # RL specific params
@@ -238,7 +229,7 @@ def _load_and_modify_config(
     config["job_id"] = task_id
     config["datasets"] = []
 
-    dataset_entry = create_dataset_entry(dataset, dataset_type, file_format)
+    dataset_entry = create_dataset_entry(dataset, dataset_type)
     config["datasets"].append(dataset_entry)
 
     config = update_model_info(config, model, task_id, expected_repo_name)
@@ -301,43 +292,11 @@ def setup_lora_config(config):
 def setup_config(
     dataset: str,
     model: str,
-    dataset_type: dict,
-    file_format: str,
+    dataset_type: TextDatasetType,
     task_id: str,
-    expected_repo_name: str | None,
-    required_finish_time: str
+    expected_repo_name: str | None
 ):
-    # Deserialize dataset_type based on class_type
-    if isinstance(dataset_type, dict) and "class_type" in dataset_type:
-        dataset_type_class = dataset_type["class_type"]
-        class_attributes = dataset_type.get("attributes", {})
-        
-        # Create an instance directly based on the class name
-        if dataset_type_class == "DpoDatasetType":
-            print("Dataset Type: DPO")
-            dataset_type = DpoDatasetType(**class_attributes)
-        elif dataset_type_class == "InstructTextDatasetType":
-            print("Dataset Type: Instruct")
-            dataset_type = InstructTextDatasetType(**class_attributes)
-        elif dataset_type_class == "GrpoDatasetType":
-            print("Dataset Type: GRPO")
-            # Handle nested RewardFunction objects in GrpoDatasetType
-            if "reward_functions" in class_attributes and class_attributes["reward_functions"]:
-                reward_functions = []
-                for reward_func_dict in class_attributes["reward_functions"]:
-                    reward_functions.append(RewardFunction(**reward_func_dict))
-                class_attributes["reward_functions"] = reward_functions
-            dataset_type = GrpoDatasetType(**class_attributes)
 
-    else:
-        # Handle error or default case
-        print(f"Unable to deserialize dataset_type: {dataset_type}")
-        return {
-            "success": False,
-            "task_id": task_id,
-            "error": "Invalid dataset_type format"
-        }
-    
     # Modify Config and save
     config_filename = f"{task_id}.yml"
     config_path = os.path.join(CONFIG_DIR, config_filename)
@@ -345,10 +304,8 @@ def setup_config(
         dataset,
         model,
         dataset_type,
-        file_format,
         task_id,
-        expected_repo_name,
-        required_finish_time
+        expected_repo_name
     )
         
     print("Initial Config:")

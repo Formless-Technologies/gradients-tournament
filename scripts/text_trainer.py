@@ -19,19 +19,10 @@ from transformers import AutoTokenizer
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
-
-import trainer.constants as train_cst
-from core.config.config_handler import create_dataset_entry
-from core.config.config_handler import save_config
-from core.config.config_handler import update_flash_attention
-from core.dataset_utils import adapt_columns_for_dpo_dataset
-from core.dataset_utils import adapt_columns_for_grpo_dataset
-from core.models.utility_models import DpoDatasetType
-from core.models.utility_models import FileFormat
-from core.models.utility_models import GrpoDatasetType
-from core.models.utility_models import InstructTextDatasetType
-from core.models.utility_models import TaskType
-from miner.logic.job_handler import create_reward_funcs_file
+from configs.serverless_config_handler import setup_config
+from configs.serverless_config_handler import TaskType
+from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
+from training.train import run_training
 
 
 def patch_model_metadata(output_dir: str, base_model_id: str):
@@ -235,11 +226,13 @@ async def main():
     dataset_path = f"{base_dataset_path}/{args.task_id}_train_data.json"
 
     # Build Config File
-
-    # Build Trainer
+    CONFIG_DIR = "/workspace/configs"
+    config_filename = f"{job_id}.yml"
+    config_path = os.path.join(CONFIG_DIR, config_filename)
+    setup_config(dataset_path, args.model, dataset_type, args.expected_repo_name)
 
     # Run Training
-
+    run_training(config_path)
 
     patch_model_metadata(output_dir, args.model)
 
