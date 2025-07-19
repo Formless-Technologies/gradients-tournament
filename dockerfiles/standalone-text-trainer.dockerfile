@@ -38,13 +38,13 @@ RUN pip install -U --no-cache-dir \
     protobuf
 
 # Install Flash Attention 2 (much faster than flash-attn v1)
-RUN pip install --no-cache-dir flash-attn==2.7.4.post1 --no-build-isolation
+#RUN pip install --no-cache-dir flash-attn==2.7.4.post1 --no-build-isolation
 
 # Install Triton for kernel compilation
 RUN pip install --no-cache-dir triton
 
 # Install DeepSpeed
-RUN pip install --no-cache-dir -U deepspeed
+#RUN pip install --no-cache-dir -U deepspeed
 
 # Install additional optimizations
 RUN pip install --no-cache-dir \
@@ -81,7 +81,7 @@ RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/in
 
 COPY configs/ /workspace/configs
 COPY training/ /workspace/training
-COPY training_helpers/ /workspace/training/training_helpers
+COPY training_helpers/ /workspace/training_helpers
 COPY scripts /workspace/scripts
 
 RUN chmod +x /workspace/scripts/run_text_trainer.sh

@@ -93,7 +93,7 @@ class DpoDatasetType(BaseModel):
     chosen_format: str | None = "{chosen}"
     rejected_format: str | None = "{rejected}"
 
-TextDatasetType = InstructTextDatasetType | DpoDatasetType | GrpoDatasetType | ChatTemplateDatasetType
+TextDatasetType = InstructTextDatasetType | DpoDatasetType | GrpoDatasetType
 
 def create_dataset_entry(
     dataset: str,

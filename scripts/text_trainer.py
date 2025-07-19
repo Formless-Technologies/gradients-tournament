@@ -94,6 +94,10 @@ async def main():
     parser.add_argument("--task-type", required=True, choices=["InstructTextTask", "DpoTask", "GrpoTask"], help="Type of task")
     parser.add_argument("--file-format", required=True, choices=["csv", "json", "hf", "s3"], help="File format")
     parser.add_argument("--expected-repo-name", help="Expected repository name")
+    parser.add_argument("--hours-to-complete", required=True, help="Number of hours to complete the job")
+    parser.add_argument("--huggingface-token", required=True, help="HF token")
+    parser.add_argument("--wandb-token", required=True, help="WandB token")
+    parser.add_argument("--huggingface-username", required=True, help="HF username")
     args = parser.parse_args()
 
     # Setup Datasets
