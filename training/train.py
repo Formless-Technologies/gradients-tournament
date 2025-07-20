@@ -135,10 +135,7 @@ def run_training(config_path: str) -> None:
     logger.info("Starting Full Model Training...")
     trainer = build_trainer(cfg, model, peft_config, tokenizer, train_dataset, eval_dataset)
 
-    try:
-        trainer.train()
-    finally:
-        trainer.push_to_hub()
+    trainer.train()
 
 
 def main():

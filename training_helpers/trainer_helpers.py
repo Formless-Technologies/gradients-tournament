@@ -9,19 +9,7 @@ import inspect
 
 def build_trainer_args(cfg: dict):
 
-    # Hub Args for HPO Trials
-    hub_kwargs = {}
-    if not cfg["hpo_run"]:
-        hub_kwargs = {
-            'hub_model_id': cfg['hub_model_id'],
-            'hub_token': cfg['hub_token'],
-            'hub_strategy': "end",
-            'push_to_hub': True,
-        }
-        lr_scheduler=SchedulerType.COSINE
-    else:
-        lr_scheduler=SchedulerType.CONSTANT_WITH_WARMUP
-
+    lr_scheduler=SchedulerType.COSINE
 
     # Build Main Invariant Training Arguments
     trainer_kwargs = {
@@ -63,11 +51,8 @@ def build_trainer_args(cfg: dict):
 
         # Misc Args
         "output_dir": cfg['output_dir'],
-        "run_name": cfg['wandb_run'],
-        "report_to": "wandb",
+        "report_to": "none"
     }
-
-    trainer_kwargs |= hub_kwargs
 
     # Training Type Specific Args
     type_spec_args = {}
