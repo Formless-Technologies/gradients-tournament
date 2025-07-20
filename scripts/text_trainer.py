@@ -94,10 +94,6 @@ async def main():
     parser.add_argument("--task-type", required=True, choices=["InstructTextTask", "DpoTask", "GrpoTask"], help="Type of task")
     parser.add_argument("--file-format", required=True, choices=["csv", "json", "hf", "s3"], help="File format")
     parser.add_argument("--expected-repo-name", help="Expected repository name")
-    parser.add_argument("--hours-to-complete", required=True, help="Number of hours to complete the job")
-    parser.add_argument("--huggingface-token", required=True, help="HF token")
-    parser.add_argument("--wandb-token", required=True, help="WandB token")
-    parser.add_argument("--huggingface-username", required=True, help="HF username")
     args = parser.parse_args()
 
     # Setup Datasets
@@ -119,13 +115,13 @@ async def main():
 
     # Setup correct output directories
     CACHE_PATH = "/cache"
-    base_dataset_path = f"{CACHE_PATH}/{args.task_id}/datasets"
+    base_dataset_path = f"{CACHE_PATH}/datasets"
     dataset_path = f"{base_dataset_path}/{args.task_id}_train_data.json" if args.file_format == FileFormat.S3.value else f"{base_dataset_path}/{args.dataset.replace('/', '--')}"
-    dataset_path = copy_dataset_if_needed(dataset_path, args.file_format)
+    #dataset_path = copy_dataset_if_needed(dataset_path, args.file_format)
 
     # Build Config File
     CONFIG_DIR = "/workspace/configs"
-    config_filename = f"{job_id}.yml"
+    config_filename = f"{args.task_id}.yml"
     config_path = os.path.join(CONFIG_DIR, config_filename)
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name)
 
