@@ -18,8 +18,6 @@ hf_api = HfApi()
 
 CONFIG_DIR = "/workspace/configs/"
 CONFIG_TEMPLATE_PATH = CONFIG_DIR + "base.yml"
-OUTPUT_DIR = "/workspace/outputs/"
-TRAIN_DIR = "/workspace/training/"
 HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 WANDB_TOKEN = os.getenv("WANDB_TOKEN")
 HUGGINGFACE_USERNAME = os.getenv("HUGGINGFACE_USERNAME")
