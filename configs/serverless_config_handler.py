@@ -118,8 +118,10 @@ def update_flash_attention(config: dict, model: str):
     return config
 
 
-def update_model_info(config: dict, model: str, job_id: str = "", expected_repo_name: str | None = None):
+def update_model_info(config: dict, model: str, task_id: str = "", expected_repo_name: str | None = None):
     # update model info
+
+    config["base_model"] = model
 
     tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
     if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
@@ -137,7 +139,7 @@ def update_model_info(config: dict, model: str, job_id: str = "", expected_repo_
         print(f"Model size from regex: {model_size}")
         config["model_params_count"] = model_size
 
-    config["base_model"] = model
+    
     if any(k in model.lower() for k in ("meta-llama-3.1")):
         config["packing"] = False
         config["use_liger_kernel"] = False
@@ -213,7 +215,7 @@ def _load_and_modify_config(
         config = yaml.safe_load(file)
     
     # Useful config
-    config["job_id"] = task_id
+    config["task_id"] = task_id
     config["hours_to_complete"] = hours_to_complete
 
 
@@ -319,7 +321,7 @@ def setup_config(
         
     print("Initial Config:")
     print("=======================================")
-    print(f"Task ID: {config['job_id']}")
+    print(f"Task ID: {config['task_id']}")
     print(f"Model: {config['base_model']}")
     print(f"Model Params: {config['model_params_count']}")
     print(f"RL Type: {config['rl']}")

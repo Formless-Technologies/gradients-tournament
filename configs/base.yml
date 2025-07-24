@@ -44,20 +44,11 @@ sequence_len: 8196
 
 ##### AUTOSET PARAMS #####
 model_params_count: 0
-job_id:
-hpo_run: false
+task_id:
 rl:
 datasets:
 dataset_prepared_path:
 output_dir: training_output
-wandb_project: Gradients-On-Demand
-wandb_mode: online
-wandb_run: your_name
-wandb_runid: default
-hub_model_id:
-hub_repo:
-hub_strategy: checkpoint
-hub_token:
 
 
 
