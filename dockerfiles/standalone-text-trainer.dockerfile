@@ -81,7 +81,6 @@ RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/in
 
 COPY configs/ /workspace/configs
 COPY training/ /workspace/training
-COPY training_helpers/ /workspace/training_helpers
 COPY scripts /workspace/scripts
 
 RUN chmod +x /workspace/scripts/run_text_trainer.sh

@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import uuid
-
+import torch
 import yaml
 from transformers import AutoTokenizer
 
@@ -21,7 +21,6 @@ sys.path.append(project_root)
 from configs.serverless_config_handler import setup_config
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
-from training.train import run_training
 
 
 def patch_model_metadata(output_dir: str, base_model_id: str):
@@ -125,8 +124,54 @@ async def main():
     config_path = os.path.join(CONFIG_DIR, config_filename)
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name)
 
-    # Run Training
-    run_training(config_path)
+
+    # Start Training
+    path_to_train_file = "/workspace/training/train.py"
+    num_gpus = torch.cuda.device_count()
+    if num_gpus == 1:
+        training_command = [
+            "accelerate", "launch",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
+            path_to_train_file,
+            "--config", str(config_path),
+        ]
+
+    else:
+        training_command = [
+            "accelerate", "launch",
+            "--multi_gpu",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
+            path_to_train_file,
+            "--config", str(config_path),
+        ]
+
+    try:
+        print("Starting training subprocess...\n", flush=True)
+        process = subprocess.Popen(
+            training_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+
+        for line in process.stdout:
+            print(line, end="", flush=True)
+
+        return_code = process.wait()
+        if return_code != 0:
+            raise subprocess.CalledProcessError(return_code, training_command)
+
+        print("Training subprocess completed successfully.", flush=True)
+
+    except subprocess.CalledProcessError as e:
+        print("Training subprocess failed!", flush=True)
+        print(f"Exit Code: {e.returncode}", flush=True)
+        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
+        raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
+
 
     patch_model_metadata(output_dir, args.model)
 
