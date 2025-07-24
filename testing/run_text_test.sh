@@ -68,4 +68,5 @@ docker run --rm --gpus all \
   --dataset-type "$DATASET_TYPE" \
   --task-type "InstructTextTask" \
   --file-format "$FILE_FORMAT" \
-  --expected-repo-name "$EXPECTED_REPO_NAME"
+  --expected-repo-name "$EXPECTED_REPO_NAME" \
+  --hours-to-complete "4"
