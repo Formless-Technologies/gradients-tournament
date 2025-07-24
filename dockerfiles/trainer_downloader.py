@@ -7,7 +7,7 @@ from enum import Enum
 from huggingface_hub import HfApi
 from huggingface_hub import hf_hub_download
 from huggingface_hub import snapshot_download
-
+from transformers import CLIPTokenizer
 from urllib.parse import urlparse
 from configs import constants as cst
 import aiohttp
@@ -72,7 +72,6 @@ class TaskType(str, Enum):
 
     def __hash__(self):
         return hash(str(self))
-
 
 async def download_text_dataset(task_id, dataset_url, file_format, dataset_dir):
     os.makedirs(dataset_dir, exist_ok=True)
@@ -139,6 +138,19 @@ def download_from_huggingface(repo_id: str, filename: str, local_dir: str) -> st
         raise e
 
 
+def download_flux_unet(repo_id: str, output_dir: str) -> str:
+    files_metadata = hf_api.list_repo_tree(repo_id=repo_id, repo_type="model")
+    file_path = None
+    for file in files_metadata:
+        if hasattr(file, "size") and file.size is not None:
+            if file.path.endswith(".safetensors") and file.size > 10 * 1024 * 1024 * 1024:
+                file_path = file.path
+                local_path = download_from_huggingface(repo_id, file_path, output_dir)
+    if not file_path:
+        raise FileNotFoundError(f"No valid file found in root of repo '{repo_id}'.")
+
+    return local_path
+
 
 async def download_base_model(repo_id: str, save_root: str) -> str:
     model_name = repo_id.replace("/", "--")
@@ -177,16 +189,30 @@ async def main():
     parser.add_argument("--file-format")
     args = parser.parse_args()
 
-    dataset_dir = cst.CACHE_DATASETS_DIR
-    model_dir = cst.CACHE_MODELS_DIR
+    dataset_dir = f"/cache/{args.task_id}/datasets"
+    model_dir = f"/cache/{args.task_id}/models"
     os.makedirs(dataset_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
 
     print(f"Downloading datasets to: {dataset_dir}", flush=True)
     print(f"Downloading models to: {model_dir}", flush=True)
 
-    dataset_path, _ = await download_text_dataset(args.task_id, args.dataset, args.file_format, dataset_dir)
-    model_path = await download_axolotl_base_model(args.model, model_dir)
+    if args.task_type == TaskType.IMAGETASK.value:
+        dataset_zip_path = await download_image_dataset(args.dataset, args.task_id, dataset_dir)
+        model_path = await download_base_model(args.model, model_dir)
+        print("Downloading clip models", flush=True)
+        CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14", cache_dir="/cache/hf_cache")
+        CLIPTokenizer.from_pretrained("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k", cache_dir="/cache/hf_cache")
+        snapshot_download(
+            repo_id="google/t5-v1_1-xxl",
+            repo_type="model",
+            local_dir="/cache/hf_cache/google--t5-v1_1-xxl",
+            local_dir_use_symlinks=False,
+            allow_patterns=["tokenizer_config.json", "spiece.model", "special_tokens_map.json", "tokenizer.json"],
+        )
+    else:
+        dataset_path, _ = await download_text_dataset(args.task_id, args.dataset, args.file_format, dataset_dir)
+        model_path = await download_axolotl_base_model(args.model, model_dir)
 
     print(f"Model path: {model_path}", flush=True)
     print(f"Dataset path: {dataset_dir}", flush=True)

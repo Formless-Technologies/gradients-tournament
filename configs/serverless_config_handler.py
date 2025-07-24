@@ -220,11 +220,13 @@ def _load_and_modify_config(
 
 
     # RL specific config
+    # DPO
     if isinstance(dataset_type, DpoDatasetType):
         config["rl"] = "dpo"
         config["learning_rate"] = 1e-6
         config["label_smoothing"] = 0.0
         config["beta"] = 0.04
+    # GRPO
     elif isinstance(dataset_type, GrpoDatasetType):
         config["rl"] = "grpo"
         config["learning_rate"] = 1e-6
