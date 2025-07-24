@@ -18,9 +18,6 @@ hf_api = HfApi()
 
 CONFIG_DIR = "/workspace/configs/"
 CONFIG_TEMPLATE_PATH = CONFIG_DIR + "base.yml"
-HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-WANDB_TOKEN = os.getenv("WANDB_TOKEN")
-HUGGINGFACE_USERNAME = os.getenv("HUGGINGFACE_USERNAME")
 CUSTOM_DATASET_TYPE = "custom"
 
 # DPO default dataset type
@@ -122,7 +119,8 @@ def update_flash_attention(config: dict, model: str):
 
 
 def update_model_info(config: dict, model: str, job_id: str = "", expected_repo_name: str | None = None):
-    print("WE ARE UPDATING THE MODEL INFO")
+    # update model info
+
     tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
     if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
         config["special_tokens"] = {"pad_token": tokenizer.eos_token}
@@ -144,10 +142,19 @@ def update_model_info(config: dict, model: str, job_id: str = "", expected_repo_
         config["packing"] = False
         config["use_liger_kernel"] = False
     config["base_model_config"] = model
-    config["wandb_runid"] = f"{job_id[:6]}_{config['rl']}"
-    config["wandb_run"] = f"{job_id[:6]}_{config['rl']}"
-    config["wandb_name"] = f"{job_id[:6]}_{config['rl']}"
-    config["hub_model_id"] = f"{HUGGINGFACE_USERNAME}/{expected_repo_name or str(uuid.uuid4())}"
+    config["hub_model_id"] = f"{expected_repo_name or str(uuid.uuid4())}"
+
+    # Calculate sequence length
+    hf_cfg = AutoConfig.from_pretrained(model)
+    max_pos = getattr(hf_cfg, "max_position_embeddings", None) or getattr(hf_cfg, "n_ctx", None)
+
+    desired_len = config["sequence_len"]
+    if max_pos is not None and desired_len > max_pos:
+        print(f"Requested seq_len={desired_len} > model max {max_pos}; falling back to {max_pos}")
+        config["sequence_len"] = max_pos
+        print(f"Sequence Length set to: {max_pos}")
+    else:
+        config["sequence_len"] = desired_len
 
     return config
 
@@ -194,7 +201,8 @@ def _load_and_modify_config(
     model: str,
     dataset_type: InstructTextDatasetType | DpoDatasetType | GrpoDatasetType,
     task_id: str,
-    expected_repo_name: str | None
+    expected_repo_name: str | None,
+    hours_to_complete: int | None
 ) -> dict:
     """
     Loads the config template and modifies it to create a new job config.
@@ -203,9 +211,13 @@ def _load_and_modify_config(
     print("Loading config template")
     with open(CONFIG_TEMPLATE_PATH, "r") as file:
         config = yaml.safe_load(file)
+    
+    # Useful config
+    config["job_id"] = task_id
+    config["hours_to_complete"] = hours_to_complete
 
 
-    # RL specific params
+    # RL specific config
     if isinstance(dataset_type, DpoDatasetType):
         config["rl"] = "dpo"
         config["learning_rate"] = 1e-6
@@ -230,32 +242,20 @@ def _load_and_modify_config(
         config["beta"] = 0.04
 
 
-    config["job_id"] = task_id
+    # Setup Datasets    
     config["datasets"] = []
-
     dataset_entry = create_dataset_entry(dataset, dataset_type)
     config["datasets"].append(dataset_entry)
 
+    # Update model specific config
     config = update_model_info(config, model, task_id, expected_repo_name)
     
-    hf_cfg = AutoConfig.from_pretrained(model)
-    
-    # Calculate max sequence length
-    max_pos = getattr(hf_cfg, "max_position_embeddings", None) or getattr(hf_cfg, "n_ctx", None)
 
-    # clamp sequence_len to the model’s max
-    desired_len = config["sequence_len"]
-    if max_pos is not None and desired_len > max_pos:
-        print(f"Requested seq_len={desired_len} > model max {max_pos}; falling back to {max_pos}")
-        config["sequence_len"] = max_pos
-        print(f"Sequence Length set to: {max_pos}")
-    else:
-        config["sequence_len"] = desired_len
-    ######################
-
+    # Setup Lora if it is used
     if config["adapter"] == "lora":
         config = setup_lora_config(config)
 
+    # Setup output dir
     output_dir = f"/workspace/axolotl/outputs/{task_id}/{expected_repo_name}"
     config["output_dir"] = output_dir
 
@@ -301,7 +301,8 @@ def setup_config(
     model: str,
     dataset_type: TextDatasetType,
     task_id: str,
-    expected_repo_name: str | None
+    expected_repo_name: str | None,
+    hours_to_complete: int | None
 ):
 
     # Modify Config and save
@@ -312,7 +313,8 @@ def setup_config(
         model,
         dataset_type,
         task_id,
-        expected_repo_name
+        expected_repo_name,
+        hours_to_complete
     )
         
     print("Initial Config:")
@@ -320,7 +322,6 @@ def setup_config(
     print(f"Task ID: {config['job_id']}")
     print(f"Model: {config['base_model']}")
     print(f"Model Params: {config['model_params_count']}")
-    print(f"HuggingFace Repo: {config['hub_model_id']}")
     print(f"RL Type: {config['rl']}")
     print("=======================================")
 

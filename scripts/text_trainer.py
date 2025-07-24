@@ -123,7 +123,7 @@ async def main():
     CONFIG_DIR = "/workspace/configs"
     config_filename = f"{args.task_id}.yml"
     config_path = os.path.join(CONFIG_DIR, config_filename)
-    setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name)
+    setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, int(args.hours_to_complete))
 
 
     # Start Training
