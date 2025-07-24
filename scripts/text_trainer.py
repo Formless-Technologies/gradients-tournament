@@ -173,7 +173,7 @@ async def main():
         print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
-
+    output_dir = f"/workspace/axolotl/outputs/{args.task_id}/{args.expected_repo_name}"
     patch_model_metadata(output_dir, args.model)
 
 
