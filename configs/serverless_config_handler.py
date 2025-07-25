@@ -120,8 +120,9 @@ def update_flash_attention(config: dict, model: str):
 
 def update_model_info(config: dict, model: str, task_id: str = "", expected_repo_name: str | None = None):
     # update model info
-
-    config["base_model"] = model
+    CACHE_PATH = "/cache"
+    model_path = f"{CACHE_PATH}/models/{model.replace('/', '--')}"
+    config["base_model"] = model_path
 
     tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
     if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
@@ -217,6 +218,7 @@ def _load_and_modify_config(
     # Useful config
     config["task_id"] = task_id
     config["hours_to_complete"] = hours_to_complete
+    
 
 
     # RL specific config
