@@ -27,7 +27,7 @@ CONFIG_DIR = "/workspace/configs/"
 OUTPUT_DIR = "/workspace/outputs/"
 CACHE_DIR = "~/.cache/huggingface"
 CACHE_DIR_HUB = os.path.expanduser("~/.cache/huggingface/hub")
-DIFFUSION_DATASET_DIR = "/dataset/images"
+DIFFUSION_DATASET_DIR = "core/dataset/images"
 CONTAINER_FLUX_PATH = "/app/flux/unet"
 
 DIFFUSION_SDXL_REPEATS = 10

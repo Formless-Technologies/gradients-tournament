@@ -34,7 +34,9 @@ def prepare_dataset(
     regularization_images_dir: str = None,
     regularization_images_repeat: int = None,
 ):
-    extraction_dir = f"{cst.DIFFUSION_DATASET_DIR}/tmp/{job_id}/"
+
+    # Extract zip file
+    extraction_dir = f"/cache/{job_id}/datasets/"
     os.makedirs(extraction_dir, exist_ok=True)
     with zipfile.ZipFile(training_images_zip_path, "r") as zip_ref:
         zip_ref.extractall(extraction_dir)
@@ -45,16 +47,13 @@ def prepare_dataset(
     else:
         training_images_dir = extraction_dir
 
-    output_dir = f"{cst.DIFFUSION_DATASET_DIR}/{job_id}/"
+    output_dir = f"/cache/{job_id}/datasets/"
     os.makedirs(output_dir, exist_ok=True)
 
     training_dir = os.path.join(
         output_dir,
         f"img/{training_images_repeat}_{instance_prompt} {class_prompt}",
     )
-
-    if os.path.exists(training_dir):
-        shutil.rmtree(training_dir)
 
     shutil.copytree(training_images_dir, training_dir)
 
@@ -64,21 +63,13 @@ def prepare_dataset(
             f"reg/{regularization_images_repeat}_{class_prompt}",
         )
 
-        if os.path.exists(regularization_dir):
-            shutil.rmtree(regularization_dir)
-        shutil.copytree(regularization_images_dir, regularization_dir)
-
     if not os.path.exists(os.path.join(output_dir, "log")):
         os.makedirs(os.path.join(output_dir, "log"))
 
     if not os.path.exists(os.path.join(output_dir, "model")):
         os.makedirs(os.path.join(output_dir, "model"))
 
-    if os.path.exists(extraction_dir):
-        shutil.rmtree(extraction_dir)
 
-    if os.path.exists(training_images_zip_path):
-        os.remove(training_images_zip_path)
 
 def save_config_toml(config: dict, config_path: str):
     with open(config_path, "w") as file:
@@ -115,7 +106,7 @@ def create_config(task_id, model, model_type, expected_repo_name):
 
     # Update config
     config["pretrained_model_name_or_path"] = model
-    config["train_data_dir"] = f"/dataset/images/{task_id}/img/"
+    config["train_data_dir"] = f"/cache/{task_id}/datasets/images/{task_id}/img/"
     output_dir = f"{train_cst.IMAGE_CONTAINER_SAVE_PATH}{task_id}/{expected_repo_name}"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
