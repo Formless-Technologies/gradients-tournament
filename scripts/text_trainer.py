@@ -111,20 +111,15 @@ async def main():
     except Exception as e:
         sys.exit(f"Error creating dataset type object: {e}")
 
-    
 
     # Setup correct output directories
-    CACHE_PATH = "/cache"
-    base_dataset_path = f"{CACHE_PATH}/{args.task_id}/datasets"
-    dataset_path = f"{base_dataset_path}/{args.task_id}_train_data.json" if args.file_format == FileFormat.S3.value else f"{base_dataset_path}/{args.dataset.replace('/', '--')}"
-    #dataset_path = copy_dataset_if_needed(dataset_path, args.file_format)
+    dataset_path = f"/cache/{args.task_id}/datasets/{args.task_id}_train_data.json"
 
     # Build Config File
     CONFIG_DIR = "/workspace/configs"
     config_filename = f"{args.task_id}.yml"
     config_path = os.path.join(CONFIG_DIR, config_filename)
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, int(args.hours_to_complete))
-
 
     # Start Training
     path_to_train_file = "/workspace/training/train.py"
