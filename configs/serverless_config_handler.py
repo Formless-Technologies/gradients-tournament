@@ -238,7 +238,7 @@ def setup_config(
         config["learning_rate"] = 1e-6
         filename, reward_funcs_names = create_reward_funcs_file(
             [reward_function.reward_func for reward_function in dataset_type.reward_functions], task_id
-            )
+        )
         config["eval_steps"] = 300
         config["save_steps"] = 300
         config["trl"] = {}
