@@ -165,25 +165,18 @@ def save_config_toml(config: dict, config_path: str):
 
 def update_model_info(config: dict, model: str, task_id: str = "", expected_repo_name: str | None = None):
     # update model info
-    CACHE_PATH = "/cache"
-    model_path = f"{CACHE_PATH}/models/{model.replace('/', '--')}"
+    model_path = f"/cache/{task_id}/models/{model.replace('/', '--')}"
     config["base_model"] = model_path
 
-    tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
         config["special_tokens"] = {"pad_token": tokenizer.eos_token}
 
     config["model_params_count"] = None
-    try:
-        model_info = hf_api.model_info(model)
-        size = model_info.safetensors.total
-        config["model_params_count"] = size
-    except Exception as e:
-        print(f"Error getting model size from safetensors: {e}")
-        model_size = re.search(r"(\d+)(?=[bB])", model)
-        model_size = int(model_size.group(1)) * 1_000_000_000 if model_size else None
-        print(f"Model size from regex: {model_size}")
-        config["model_params_count"] = model_size
+    model_size = re.search(r"(\d+)(?=[bB])", model)
+    model_size = int(model_size.group(1)) * 1_000_000_000 if model_size else None
+    print(f"Model size from regex: {model_size}")
+    config["model_params_count"] = model_size
 
     
     if any(k in model.lower() for k in ("meta-llama-3.1")):
@@ -193,7 +186,7 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     config["hub_model_id"] = f"{expected_repo_name or str(uuid.uuid4())}"
 
     # Calculate sequence length
-    hf_cfg = AutoConfig.from_pretrained(model)
+    hf_cfg = AutoConfig.from_pretrained(model_path)
     max_pos = getattr(hf_cfg, "max_position_embeddings", None) or getattr(hf_cfg, "n_ctx", None)
 
     desired_len = config["sequence_len"]

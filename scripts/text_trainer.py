@@ -115,7 +115,7 @@ async def main():
 
     # Setup correct output directories
     CACHE_PATH = "/cache"
-    base_dataset_path = f"{CACHE_PATH}/datasets"
+    base_dataset_path = f"{CACHE_PATH}/{args.task_id}/datasets"
     dataset_path = f"{base_dataset_path}/{args.task_id}_train_data.json" if args.file_format == FileFormat.S3.value else f"{base_dataset_path}/{args.dataset.replace('/', '--')}"
     #dataset_path = copy_dataset_if_needed(dataset_path, args.file_format)
 

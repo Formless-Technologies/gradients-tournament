@@ -6,15 +6,8 @@ import hashlib
 def load_tokenizer(model_name: str, cfg: dict):
     tok = AutoTokenizer.from_pretrained(
         model_name,
-        use_auth_token=cfg.get("hub_token"),
-        trust_remote_code=True,
-        padding_side="left", 
-        truncation_side="right"
+        trust_remote_code=True
     )
-    if tok.pad_token_id is None:      # e.g. Llama‑3, Qwen‑2 FlashAttn
-        tok.pad_token = tok.eos_token
-    tok.add_eos_token = True
-    tok.truncation = True
     return tok
 
 

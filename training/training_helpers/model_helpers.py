@@ -11,6 +11,7 @@ def load_model(model_name: str, cfg: dict) -> AutoModelForCausalLM:
     #     else:
     #         model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2")
     # except:
+
     model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16)
 
     # Model Dependant Monkey Patches
