@@ -18,16 +18,9 @@ hf_api = HfApi()
 
 CONFIG_DIR = "/workspace/configs/"
 CONFIG_TEMPLATE_PATH = CONFIG_DIR + "base.yml"
-CUSTOM_DATASET_TYPE = "custom"
 
-# DPO default dataset type
-DPO_DEFAULT_DATASET_TYPE = "chatml.intel"
-DPO_DEFAULT_FIELD_PROMPT = "question"
-DPO_DEFAULT_FIELD_SYSTEM = "system"
-DPO_DEFAULT_FIELD_CHOSEN = "chosen"
-DPO_DEFAULT_FIELD_REJECTED = "rejected"
 
-GRPO_DEFAULT_FIELD_PROMPT = "prompt"
+##### HELPERS #####
 
 class FileFormat(str, Enum):
     CSV = "csv"  # needs to be local file
@@ -46,18 +39,6 @@ class TaskType(str, Enum):
         return hash(str(self))
 
 
-class InstructTextDatasetType(BaseModel):
-    system_prompt: str | None = ""
-    system_format: str | None = "{system}"
-    field_system: str | None = None
-    field_instruction: str | None = None
-    field_input: str | None = None
-    field_output: str | None = None
-    format: str | None = None
-    no_input_format: str | None = None
-    field: str | None = None
-
-
 class RewardFunction(BaseModel):
     """Model representing a reward function with its metadata"""
     reward_func: str = Field(
@@ -73,11 +54,20 @@ class RewardFunction(BaseModel):
     func_hash: str | None = None
     is_generic: bool | None = None
 
+class InstructTextDatasetType(BaseModel):
+    system_prompt: str | None = ""
+    system_format: str | None = "{system}"
+    field_system: str | None = None
+    field_instruction: str | None = None
+    field_input: str | None = None
+    field_output: str | None = None
+    format: str | None = None
+    no_input_format: str | None = None
+    field: str | None = None
 
 class GrpoDatasetType(BaseModel):
     field_prompt: str | None = None
     reward_functions: list[RewardFunction] | None = []
-
 
 class DpoDatasetType(BaseModel):
     field_prompt: str | None = None
@@ -111,12 +101,67 @@ def create_dataset_entry(
 
     return dataset_entry
 
+def _process_grpo_dataset_fields(dataset_type: GrpoDatasetType) -> dict:
+    field_prompt = dataset_type.field_prompt
 
-def update_flash_attention(config: dict, model: str):
-    # You might want to make this model-dependent
-    config["flash_attention"] = True
-    return config
+    full_template_config = {"field_prompt": field_prompt}
 
+    return full_template_config
+
+
+def _process_dpo_dataset_fields(dataset_type: DpoDatasetType) -> dict:
+
+    field_prompt = dataset_type.field_prompt
+    field_chosen = dataset_type.field_chosen
+    field_rejected = dataset_type.field_rejected
+    full_template_config = {"field_prompt": field_prompt,  "field_chosen": field_chosen, "field_rejected": field_rejected}
+
+    return full_template_config
+
+
+def _process_instruct_dataset_fields(dataset_type: InstructTextDatasetType) -> dict:
+    field_instruction = dataset_type.field_instruction
+    field_input = dataset_type.field_input
+    field_output = dataset_type.field_output
+    full_template_config = {"field_instruction": field_instruction,  "field_input": field_input, "field_output": field_output}
+
+    return full_template_config
+
+def create_reward_funcs_file(reward_funcs: list[str], task_id: str) -> list[str]:
+    """
+    Create a Python file with reward functions for GRPO training.
+
+    Args:
+        reward_funcs: List of strings containing Python reward function implementations
+        task_id: Unique task identifier
+    """
+    filename = f"rewards_{task_id}"
+    filepath = os.path.join(CONFIG_DIR, f"{filename}.py")
+
+    func_names = []
+    for reward_func in reward_funcs:
+        if "def " in reward_func:
+            func_name = reward_func.split("def ")[1].split("(")[0].strip()
+            func_names.append(func_name)
+
+    with open(filepath, "w") as f:
+        f.write("# Auto-generated reward functions file\n\n")
+        for reward_func in reward_funcs:
+            f.write(f"{reward_func}\n\n")
+
+    return filename, func_names
+
+def save_config(config: dict, config_path: str):
+    with open(config_path, "w") as file:
+        yaml.dump(config, file)
+
+
+def save_config_toml(config: dict, config_path: str):
+    with open(config_path, "w") as file:
+        toml.dump(config, file)
+
+
+####################
 
 def update_model_info(config: dict, model: str, task_id: str = "", expected_repo_name: str | None = None):
     # update model info
@@ -162,54 +207,14 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     return config
 
 
-def save_config(config: dict, config_path: str):
-    with open(config_path, "w") as file:
-        yaml.dump(config, file)
-
-
-def save_config_toml(config: dict, config_path: str):
-    with open(config_path, "w") as file:
-        toml.dump(config, file)
-
-
-def _process_grpo_dataset_fields(dataset_type: GrpoDatasetType) -> dict:
-    field_prompt = dataset_type.field_prompt
-
-    full_template_config = {"field_prompt": field_prompt}
-
-    return full_template_config
-
-
-def _process_dpo_dataset_fields(dataset_type: DpoDatasetType) -> dict:
-
-    field_prompt = dataset_type.field_prompt
-    field_chosen = dataset_type.field_chosen
-    field_rejected = dataset_type.field_rejected
-    full_template_config = {"field_prompt": field_prompt,  "field_chosen": field_chosen, "field_rejected": field_rejected}
-
-    return full_template_config
-
-
-def _process_instruct_dataset_fields(dataset_type: InstructTextDatasetType) -> dict:
-    field_instruction = dataset_type.field_instruction
-    field_input = dataset_type.field_input
-    field_output = dataset_type.field_output
-    full_template_config = {"field_instruction": field_instruction,  "field_input": field_input, "field_output": field_output}
-
-    return full_template_config
-
-
-def _load_and_modify_config(
+def setup_config(
     dataset: str,
     model: str,
-    dataset_type: InstructTextDatasetType | DpoDatasetType | GrpoDatasetType,
+    dataset_type: TextDatasetType,
     task_id: str,
     expected_repo_name: str | None,
     hours_to_complete: int | None
-) -> dict:
-    """
-    Loads the config template and modifies it to create a new job config.
-    """
+):
 
     print("Loading config template")
     with open(CONFIG_TEMPLATE_PATH, "r") as file:
@@ -219,8 +224,6 @@ def _load_and_modify_config(
     config["task_id"] = task_id
     config["hours_to_complete"] = hours_to_complete
     
-
-
     # RL specific config
     # DPO
     if isinstance(dataset_type, DpoDatasetType):
@@ -228,6 +231,7 @@ def _load_and_modify_config(
         config["learning_rate"] = 1e-6
         config["label_smoothing"] = 0.0
         config["beta"] = 0.04
+
     # GRPO
     elif isinstance(dataset_type, GrpoDatasetType):
         config["rl"] = "grpo"
@@ -256,79 +260,18 @@ def _load_and_modify_config(
     # Update model specific config
     config = update_model_info(config, model, task_id, expected_repo_name)
     
-
     # Setup Lora if it is used
     if config["adapter"] == "lora":
-        config = setup_lora_config(config)
+        config["lora_r"] = 32
+        config["lora_alpha"] = config["lora_alpha"]
+        config["lora_dropout"] = 0.05
 
     # Setup output dir
     output_dir = f"/workspace/axolotl/outputs/{task_id}/{expected_repo_name}"
     config["output_dir"] = output_dir
 
-    return config
-
-
-def create_reward_funcs_file(reward_funcs: list[str], task_id: str) -> list[str]:
-    """
-    Create a Python file with reward functions for GRPO training.
-
-    Args:
-        reward_funcs: List of strings containing Python reward function implementations
-        task_id: Unique task identifier
-    """
-    filename = f"rewards_{task_id}"
-    filepath = os.path.join(CONFIG_DIR, f"{filename}.py")
-
-    func_names = []
-    for reward_func in reward_funcs:
-        if "def " in reward_func:
-            func_name = reward_func.split("def ")[1].split("(")[0].strip()
-            func_names.append(func_name)
-
-    with open(filepath, "w") as f:
-        f.write("# Auto-generated reward functions file\n\n")
-        for reward_func in reward_funcs:
-            f.write(f"{reward_func}\n\n")
-
-    return filename, func_names
-
-
-def setup_lora_config(config):
-    """Setup QLoRA configuration for more efficient adaptation"""
-    config["adapter"] = "lora"
-    config["lora_r"] = 32
-    config["lora_alpha"] = config["lora_alpha"]
-    config["lora_dropout"] = 0.05
-    return config
-
-
-def setup_config(
-    dataset: str,
-    model: str,
-    dataset_type: TextDatasetType,
-    task_id: str,
-    expected_repo_name: str | None,
-    hours_to_complete: int | None
-):
-
     # Modify Config and save
     config_filename = f"{task_id}.yml"
     config_path = os.path.join(CONFIG_DIR, config_filename)
-    config = _load_and_modify_config(
-        dataset,
-        model,
-        dataset_type,
-        task_id,
-        expected_repo_name,
-        hours_to_complete
-    )
-        
-    print("Initial Config:")
-    print("=======================================")
-    print(f"Task ID: {config['task_id']}")
-    print(f"Model: {config['base_model']}")
-    print(f"Model Params: {config['model_params_count']}")
-    print(f"RL Type: {config['rl']}")
-    print("=======================================")
 
     save_config(config, config_path)
