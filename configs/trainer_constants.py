@@ -5,6 +5,7 @@ TEMP_REPO_PATH = "/tmp/trainer/repos/"
 IMAGE_CONTAINER_SAVE_PATH = "/app/checkpoints/"
 TEXT_CONTAINER_SAVE_PATH = "/workspace/axolotl/outputs/"
 TASKS_FILE_PATH = "trainer/task_history.json"
+WANDB_LOGS_DIR = "/cache/wandb_logs"
 VOLUME_NAMES = ["checkpoints", "cache"]
 HF_UPLOAD_DOCKER_IMAGE = "diagonalge/hf-uploader:latest"
 TRAINER_DOWNLOADER_DOCKER_IMAGE = "diagonalge/trainer-downloader:latest"

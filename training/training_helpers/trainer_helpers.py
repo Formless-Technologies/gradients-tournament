@@ -51,7 +51,7 @@ def build_trainer_args(cfg: dict):
 
         # Misc Args
         "output_dir": cfg['output_dir'],
-        "report_to": "none"
+        "report_to": "wandb"
     }
 
     # Training Type Specific Args

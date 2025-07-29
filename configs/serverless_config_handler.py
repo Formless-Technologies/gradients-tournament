@@ -251,6 +251,14 @@ def setup_config(
         config["lora_alpha"] = config["lora_alpha"]
         config["lora_dropout"] = 0.05
 
+    log_wandb = True
+    WANDB_LOGS_DIR = "/cache/wandb_logs"
+    if log_wandb:
+        os.environ["WANDB_RUN_ID"] = f"{task_id}_{expected_repo_name}"
+        os.environ["WANDB_NAME"] = f"{task_id}_{expected_repo_name}"
+        os.environ["WANDB_MODE"] = "offline"
+        os.makedirs(WANDB_LOGS_DIR, exist_ok=True)
+
     # Setup output dir
     output_dir = f"/app/checkpoints/{task_id}/{expected_repo_name}"
     config["output_dir"] = output_dir

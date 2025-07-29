@@ -12,6 +12,7 @@ import subprocess
 import sys
 import uuid
 import torch
+import pathlib
 import yaml
 from transformers import AutoTokenizer
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,23 @@ sys.path.append(project_root)
 from configs.serverless_config_handler import setup_config
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
+
+
+def patch_wandb_symlinks(base_dir: str):
+    """Handle WandB symlinks by converting to real files."""
+    for root, _, files in os.walk(base_dir):
+        for name in files:
+            full_path = os.path.join(root, name)
+            if os.path.islink(full_path):
+                target_path = os.readlink(full_path)
+                try:
+                    os.unlink(full_path)
+                    if os.path.exists(target_path):
+                        shutil.copy(target_path, full_path)
+                    else:
+                        pathlib.Path(full_path).touch()
+                except Exception as e:
+                    print(f"Symlink patch failed: {e}")
 
 
 def patch_model_metadata(output_dir: str, base_model_id: str):
@@ -155,6 +173,9 @@ async def main():
         print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
+
+    WANDB_LOGS_DIR = "/cache/wandb_logs"
+    patch_wandb_symlinks(WANDB_LOGS_DIR)
     patch_model_metadata(output_dir, args.model)
 
 
