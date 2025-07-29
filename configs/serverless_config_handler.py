@@ -224,11 +224,11 @@ def setup_config(
         filename, reward_funcs_names = create_reward_funcs_file(
             [reward_function.reward_func for reward_function in dataset_type.reward_functions], task_id
         )
-        config["eval_steps"] = 300
-        config["save_steps"] = 300
+        config["eval_steps"] = 100
+        config["save_steps"] = 100
         config["trl"] = {}
         config["trl"]["beta"] = 0.04
-        config["trl"]["max_completion_length"] = 128
+        config["trl"]["max_completion_length"] = 64
         config["trl"]["use_vllm"] = False
         config["trl"]["num_generations"] = 2
         config["trl"]["reward_funcs"] = [f"{filename}.{func_name}" for func_name in reward_funcs_names]
@@ -247,10 +247,10 @@ def setup_config(
     
     # Setup Lora if it is used
     if config["adapter"] == "lora":
-        config["lora_r"] = 32
+        # Looks silly right now but useful if want to modify based on rl type
+        config["lora_r"] = config["lora_r"]
         config["lora_alpha"] = config["lora_alpha"]
-        config["lora_dropout"] = 0.05
-
+        config["lora_dropout"] = config["lora_dropout"]
 
     # Setup WandB
     log_wandb = True
