@@ -3,7 +3,7 @@ import os
 import argparse
 import logging
 import yaml
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import torch
 from transformers import EarlyStoppingCallback
 from trl import (
@@ -51,11 +51,12 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
         callbacks.append(
             EarlyStoppingCallback(early_stopping_patience=cfg.get('early_stopping_patience', 4), early_stopping_threshold=1e-4)
         )
-    # calculate time left for job
-    seconds_remaining = int(cfg['hours_to_complete'])*3600
+    # Calculate time left for job
+    time_remaining = datetime.fromisoformat(cfg['required_finish_time']) - datetime.now(timezone.utc)
+    seconds_remaining = max(0.0, time_remaining.total_seconds())
 
     if seconds_remaining is not None:
-        callbacks.append(TimeLimitCallback(seconds_remaining*0.9))
+        callbacks.append(TimeLimitCallback(seconds_remaining*0.95))
     ###################
 
 

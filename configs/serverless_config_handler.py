@@ -198,7 +198,7 @@ def setup_config(
     dataset_type: TextDatasetType,
     task_id: str,
     expected_repo_name: str | None,
-    hours_to_complete: int | None
+    required_finish_time: str | None
 ):
 
     print("Loading config template")
@@ -207,7 +207,7 @@ def setup_config(
     
     # Useful config
     config["task_id"] = task_id
-    config["hours_to_complete"] = hours_to_complete
+    config["required_finish_time"] = required_finish_time
     
     # RL specific config
     # DPO

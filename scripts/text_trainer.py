@@ -14,7 +14,7 @@ import uuid
 import torch
 import yaml
 from transformers import AutoTokenizer
-
+from datetime import datetime, timedelta, timezone
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
@@ -100,9 +100,13 @@ async def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
+    # Calculate required finish time
+    required_finish_time_dt  = datetime.now(timezone.utc) + timedelta(hours=int(args.hours_to_complete)) - timedelta(minutes=15) # Add 15 minute leeway for docker build and setup
+    required_finish_time = required_finish_time_dt.isoformat()
+
     # Build Config File
     config_path = f"/workspace/configs/{args.task_id}.yml"
-    setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, int(args.hours_to_complete))
+    setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
     # Start Training
     path_to_train_file = "/workspace/training/train.py"
