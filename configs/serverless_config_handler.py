@@ -256,7 +256,7 @@ def setup_config(
         config["lora_dropout"] = 0.05
 
     # Setup output dir
-    output_dir = f"/workspace/axolotl/outputs/{task_id}/{expected_repo_name}"
+    output_dir = f"/app/checkpoints/{task_id}/{expected_repo_name}"
     config["output_dir"] = output_dir
 
     # Modify Config and save
