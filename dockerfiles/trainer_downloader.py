@@ -9,7 +9,7 @@ from huggingface_hub import hf_hub_download
 from huggingface_hub import snapshot_download
 from transformers import CLIPTokenizer
 from urllib.parse import urlparse
-from configs import constants as cst
+from configs import trainer_constants as cst
 import aiohttp
 
 
