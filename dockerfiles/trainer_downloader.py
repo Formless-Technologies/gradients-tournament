@@ -189,8 +189,8 @@ async def main():
     parser.add_argument("--file-format")
     args = parser.parse_args()
 
-    dataset_dir = f"/cache/{args.task_id}/datasets"
-    model_dir = f"/cache/{args.task_id}/models"
+    dataset_dir = f"/cache/datasets"
+    model_dir = f"/cache/models"
     os.makedirs(dataset_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
 

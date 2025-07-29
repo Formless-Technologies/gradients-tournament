@@ -161,7 +161,7 @@ def save_config_toml(config: dict, config_path: str):
 
 def update_model_info(config: dict, model: str, task_id: str = "", expected_repo_name: str | None = None):
     # update model info
-    model_path = f"/cache/{task_id}/models/{model.replace('/', '--')}"
+    model_path = f"/cache/models/{model.replace('/', '--')}"
     config["base_model"] = model_path
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)

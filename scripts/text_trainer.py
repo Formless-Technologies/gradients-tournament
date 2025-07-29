@@ -113,7 +113,7 @@ async def main():
 
 
     # Setup correct output directories
-    dataset_path = f"/cache/{args.task_id}/datasets/{args.task_id}_train_data.json"
+    dataset_path = f"/cache/datasets/{args.task_id}_train_data.json"
 
     # Build Config File
     CONFIG_DIR = "/workspace/configs"
@@ -168,7 +168,7 @@ async def main():
         print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
-    output_dir = f"/workspace/axolotl/outputs/{args.task_id}/{args.expected_repo_name}"
+    output_dir = f"/app/checkpoints/{args.task_id}/{args.expected_repo_name}"
     patch_model_metadata(output_dir, args.model)
 
 
