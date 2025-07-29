@@ -251,6 +251,8 @@ def setup_config(
         config["lora_alpha"] = config["lora_alpha"]
         config["lora_dropout"] = 0.05
 
+
+    # Setup WandB
     log_wandb = True
     WANDB_LOGS_DIR = "/cache/wandb_logs"
     if log_wandb:
