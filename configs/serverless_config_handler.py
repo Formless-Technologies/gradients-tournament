@@ -11,10 +11,6 @@ import toml
 import yaml
 from transformers import AutoTokenizer
 from transformers import AutoConfig
-from huggingface_hub import HfApi
-
-
-hf_api = HfApi()
 
 CONFIG_DIR = "/workspace/configs/"
 CONFIG_TEMPLATE_PATH = CONFIG_DIR + "base.yml"
