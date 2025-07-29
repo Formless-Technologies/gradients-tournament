@@ -4,10 +4,7 @@ from transformers import AutoTokenizer
 import hashlib
 
 def load_tokenizer(model_name: str, cfg: dict):
-    tok = AutoTokenizer.from_pretrained(
-        model_name,
-        trust_remote_code=True
-    )
+    tok = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     return tok
 
 

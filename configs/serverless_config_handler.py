@@ -256,7 +256,6 @@ def setup_config(
     config["output_dir"] = output_dir
 
     # Modify Config and save
-    config_filename = f"{task_id}.yml"
-    config_path = f"/workspace/configs/{config_filename}"
+    config_path = f"/workspace/configs/{task_id}.yml"
 
     save_config(config, config_path)
