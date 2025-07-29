@@ -60,7 +60,6 @@ RUN pip install textstat
 RUN pip install detoxify
 RUN pip install langcheck
 RUN pip install debugpy
-
 RUN pip install cleanlab
 RUN pip install sentence-transformers
 
@@ -77,7 +76,7 @@ ENV NCCL_SHARP_DISABLE=1
 
 
 WORKDIR /workspace
-RUN mkdir -p /workspace/configs /workspace/outputs /workspace/data /workspace/input_data /workspace/training /workspace/scripts
+RUN mkdir -p /workspace/configs /workspace/training /workspace/scripts /app/checkpoints
 
 COPY configs/ /workspace/configs
 COPY training/ /workspace/training

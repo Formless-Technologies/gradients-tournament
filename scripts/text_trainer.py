@@ -65,24 +65,6 @@ def patch_model_metadata(output_dir: str, base_model_id: str):
         pass
 
 
-def copy_dataset_if_needed(dataset_path, file_format):
-    """Copy dataset to Axolotl directories for non-HF datasets."""
-    if file_format != FileFormat.HF.value:
-        dataset_filename = os.path.basename(dataset_path)
-
-        os.makedirs("/workspace/axolotl/data", exist_ok=True)
-        os.makedirs("/workspace/axolotl", exist_ok=True)
-
-        data_path = f"/workspace/axolotl/data/{dataset_filename}"
-        root_path = f"/workspace/axolotl/{dataset_filename}"
-
-        shutil.copy(dataset_path, data_path)
-        shutil.copy(dataset_path, root_path)
-
-        return data_path
-    return dataset_path
-
-
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
     parser = argparse.ArgumentParser(description="Text Model Training Script")
@@ -111,14 +93,16 @@ async def main():
     except Exception as e:
         sys.exit(f"Error creating dataset type object: {e}")
 
-
-    # Setup correct output directories
     dataset_path = f"/cache/datasets/{args.task_id}_train_data.json"
 
+
+    # Setup correct output directories
+    output_dir = f"/app/checkpoints/{args.task_id}/{args.expected_repo_name}"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
     # Build Config File
-    CONFIG_DIR = "/workspace/configs"
-    config_filename = f"{args.task_id}.yml"
-    config_path = os.path.join(CONFIG_DIR, config_filename)
+    config_path = f"/workspace/configs/{args.task_id}.yml"
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, int(args.hours_to_complete))
 
     # Start Training
@@ -168,7 +152,6 @@ async def main():
         print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
-    output_dir = f"/app/checkpoints/{args.task_id}/{args.expected_repo_name}"
     patch_model_metadata(output_dir, args.model)
 
 

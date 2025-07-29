@@ -12,10 +12,6 @@ import yaml
 from transformers import AutoTokenizer
 from transformers import AutoConfig
 
-CONFIG_DIR = "/workspace/configs/"
-CONFIG_TEMPLATE_PATH = CONFIG_DIR + "base.yml"
-
-
 ##### HELPERS #####
 
 class FileFormat(str, Enum):
@@ -132,7 +128,7 @@ def create_reward_funcs_file(reward_funcs: list[str], task_id: str) -> list[str]
         task_id: Unique task identifier
     """
     filename = f"rewards_{task_id}"
-    filepath = os.path.join(CONFIG_DIR, f"{filename}.py")
+    filepath = f"/workspace/configs/{filename}.py"
 
     func_names = []
     for reward_func in reward_funcs:
@@ -206,7 +202,7 @@ def setup_config(
 ):
 
     print("Loading config template")
-    with open(CONFIG_TEMPLATE_PATH, "r") as file:
+    with open("/workspace/configs/base.yml", "r") as file:
         config = yaml.safe_load(file)
     
     # Useful config
@@ -261,6 +257,6 @@ def setup_config(
 
     # Modify Config and save
     config_filename = f"{task_id}.yml"
-    config_path = os.path.join(CONFIG_DIR, config_filename)
+    config_path = f"/workspace/configs/{config_filename}"
 
     save_config(config, config_path)
