@@ -43,7 +43,7 @@ docker run --rm \
 echo "Starting training..."
 docker run --rm --gpus all \
   --security-opt=no-new-privileges \
-  -e WANDB_LOGS_PATH="/cache/wandb_logs" \
+  -e WANDB_LOGS_PATH="/cache/wandb_logs/$TASK_ID" \
   --cap-drop=ALL \
   --memory=64g \
   --cpus=8 \
