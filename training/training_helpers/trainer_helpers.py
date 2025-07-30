@@ -72,6 +72,7 @@ def build_trainer_args(cfg: dict):
             'loss_type': 'dr_grpo',
             'mask_truncated_completions': True,
             'greater_is_better': True,
+            'gradient_checkpointing': False,
         }
     else:
         type_spec_args = {
