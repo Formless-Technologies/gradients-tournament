@@ -3,20 +3,20 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 import hashlib
 
-def load_tokenizer(model_name: str, cfg: dict):
+def load_tokenizer(model_name: str, config: dict):
     tok = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
     return tok
 
 
-def load_sft_datasets(cfg: dict):
+def load_sft_datasets(config: dict):
     """
     Return (train_ds, eval_ds)
-    If cfg["val_set_size"] is 0 → eval_ds is None.
+    If config["val_set_size"] is 0 → eval_ds is None.
     """
     # Load **only one** split so we always get a Dataset, never a DatasetDict
     ds_train = load_dataset(
         "json",
-        data_files=cfg["datasets"][0]["path"],
+        data_files=config["datasets"][0]["path"],
         split="train",          # guarantees Dataset, not DatasetDict
         storage_options={'client_kwargs': {'timeout': aiohttp.ClientTimeout(total=1800)}}
     )
@@ -30,19 +30,19 @@ def load_sft_datasets(cfg: dict):
         example["prompt"] = prompt
         return example                  
     
-    if cfg["datasets"][0]["field_input"] is not None:
+    if config["datasets"][0]["field_input"] is not None:
         # Standardise column names
         ds_train = ds_train.rename_columns({
-            cfg["datasets"][0]["field_instruction"]:   "prompt",
-            cfg["datasets"][0]["field_input"]:   "input",
-            cfg["datasets"][0]["field_output"]:   "completion",
+            config["datasets"][0]["field_instruction"]:   "prompt",
+            config["datasets"][0]["field_input"]:   "input",
+            config["datasets"][0]["field_output"]:   "completion",
         })
         ds_train = ds_train.map(combine_prompt)
     else:
         # Standardise column names
         ds_train = ds_train.rename_columns({
-            cfg["datasets"][0]["field_instruction"]:   "prompt",
-            cfg["datasets"][0]["field_output"]:   "completion",
+            config["datasets"][0]["field_instruction"]:   "prompt",
+            config["datasets"][0]["field_output"]:   "completion",
         })
 
     orig_len = len(ds_train)
@@ -70,7 +70,7 @@ def load_sft_datasets(cfg: dict):
         f"({dup_removed / orig_len:.2%} of original).")
     
     # Optional random split
-    val_size = cfg.get("val_set_size", 0)
+    val_size = config.get("val_set_size", 0)
     if val_size:
         split = ds_train.train_test_split(test_size=val_size, seed=42)
         train_ds, eval_ds = split["train"], split["test"]
@@ -80,24 +80,24 @@ def load_sft_datasets(cfg: dict):
     return train_ds, eval_ds
 
 
-def load_dpo_datasets(cfg: dict):
+def load_dpo_datasets(config: dict):
     """
     Return (train_ds, eval_ds) ready for TRL‑DPO.
-    If cfg["val_set_size"] is 0 → eval_ds is None.
+    If config["val_set_size"] is 0 → eval_ds is None.
     """
     # Load dataset (guarantees a Dataset, not a DatasetDict)
     ds_train = load_dataset(
         "json",
-        data_files=cfg["datasets"][0]["path"],
+        data_files=config["datasets"][0]["path"],
         split="train",
         storage_options={'client_kwargs': {'timeout': aiohttp.ClientTimeout(total=1800)}}
     )
 
     # Standardise column names
     ds_train = ds_train.rename_columns({
-        cfg["datasets"][0]["field_prompt"]:   "prompt",
-        cfg["datasets"][0]["field_chosen"]:   "chosen",
-        cfg["datasets"][0]["field_rejected"]: "rejected",
+        config["datasets"][0]["field_prompt"]:   "prompt",
+        config["datasets"][0]["field_chosen"]:   "chosen",
+        config["datasets"][0]["field_rejected"]: "rejected",
     })
 
     orig_len = len(ds_train)
@@ -126,7 +126,7 @@ def load_dpo_datasets(cfg: dict):
         f"({dup_removed / orig_len:.2%} of original).")
 
     # Optional random split
-    val_size = cfg.get("val_set_size", 0)
+    val_size = config.get("val_set_size", 0)
     if val_size:
         split = ds_train.train_test_split(test_size=val_size, seed=42)
         train_ds, eval_ds = split["train"], split["test"]
@@ -136,22 +136,22 @@ def load_dpo_datasets(cfg: dict):
     return train_ds, eval_ds
 
 
-def load_grpo_datasets(cfg: dict):
+def load_grpo_datasets(config: dict):
     """
     Return (train_ds, eval_ds) ready for TRL‑GRPO.
-    If cfg["val_set_size"] is 0 → eval_ds is None.
+    If config["val_set_size"] is 0 → eval_ds is None.
     """
     # Load **only one** split so we always get a Dataset, never a DatasetDict
     ds_train = load_dataset(
         "json",
-        data_files=cfg["datasets"][0]["path"],
+        data_files=config["datasets"][0]["path"],
         split="train",          # guarantees Dataset, not DatasetDict
         storage_options={'client_kwargs': {'timeout': aiohttp.ClientTimeout(total=1800)}}
     )
 
     # Standardise column names
     ds_train = ds_train.rename_columns({
-        cfg["datasets"][0]["field_prompt"]:   "prompt",
+        config["datasets"][0]["field_prompt"]:   "prompt",
     })
 
     orig_len = len(ds_train)
@@ -180,7 +180,7 @@ def load_grpo_datasets(cfg: dict):
 
 
     # Optional random split
-    val_size = cfg.get("val_set_size", 0)
+    val_size = config.get("val_set_size", 0)
     if val_size:
         split = ds_train.train_test_split(test_size=val_size, seed=42)
         train_ds, eval_ds = split["train"], split["test"]
