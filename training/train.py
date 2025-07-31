@@ -43,16 +43,16 @@ def setup_logger() -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
+def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds):
 
     #### Callbacks ####
     callbacks = []
-    if cfg.get('early_stopping', True):
+    if config.get('early_stopping', True):
         callbacks.append(
-            EarlyStoppingCallback(early_stopping_patience=cfg.get('early_stopping_patience', 4), early_stopping_threshold=1e-4)
+            EarlyStoppingCallback(early_stopping_patience=config.get('early_stopping_patience', 4), early_stopping_threshold=1e-4)
         )
     # Calculate time left for job
-    time_remaining = datetime.fromisoformat(cfg['required_finish_time']) - datetime.now(timezone.utc)
+    time_remaining = datetime.fromisoformat(config['required_finish_time']) - datetime.now(timezone.utc)
     seconds_remaining = max(0.0, time_remaining.total_seconds())
 
     if seconds_remaining is not None:
@@ -61,12 +61,12 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
 
 
     ##### Training Arguments ####
-    trainer_kwargs = build_trainer_args(cfg)
+    trainer_kwargs = build_trainer_args(config)
 
     #####################################
     logger = setup_logger()
     logger.info("Initializing Trainer")
-    if cfg["rl"] == "dpo":
+    if config["rl"] == "dpo":
         trainer_args = DPOConfig(
             **trainer_kwargs,
         )
@@ -80,14 +80,14 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
             callbacks=callbacks,
             peft_config=peft_config
         )
-    elif cfg["rl"] == "grpo":
+    elif config["rl"] == "grpo":
         trainer_args = GRPOConfig(
             **trainer_kwargs,
         )
         return GRPOTrainer(
             model=model,
             args=trainer_args,
-            reward_funcs=reward_functions(cfg),
+            reward_funcs=reward_functions(config),
             train_dataset=train_ds,
             eval_dataset=eval_ds,
             processing_class=tokenizer,
@@ -111,7 +111,7 @@ def build_trainer(cfg: dict, model, peft_config, tokenizer, train_ds, eval_ds):
 
 def run_training(config_path: str) -> None:
     """Run the training loop using the provided YAML config path."""
-    cfg = load_config(config_path)
+    config = load_config(config_path)
 
     logger = setup_logger()
 
@@ -121,25 +121,28 @@ def run_training(config_path: str) -> None:
     
     logger.info("Loaded config from %s", config_path)
     
-    # after loading cfg...
-    tokenizer = load_tokenizer(cfg['base_model'], cfg)
+    # after loading config...
+    tokenizer = load_tokenizer(config['base_model'], config)
 
-    if cfg["rl"] == "dpo":
-        train_dataset, eval_dataset = load_dpo_datasets(cfg)
-    elif cfg["rl"] == "grpo":
-        train_dataset, eval_dataset = load_grpo_datasets(cfg)
-    else:
-        train_dataset, eval_dataset = load_sft_datasets(cfg)
+    if config['rl'] == "sft":
+        train_dataset, eval_dataset = load_sft_datasets(config)
+    elif config['rl'] == "dpo":
+        train_dataset, eval_dataset = load_dpo_datasets(config)
+    elif config['rl'] == "grpo":
+        train_dataset, eval_dataset = load_grpo_datasets(config)
+        
 
-    model = load_model(cfg['base_model'], cfg)
+    model = load_model(config['base_model'], config)
+    num_model_parameters = model.num_parameters()
+    config['model_params_count'] = num_model_parameters
 
-    if cfg.get('adapter') == 'lora':
-        peft_config = get_lora_adapter(model, cfg)
+    if config.get('adapter') == "lora":
+        peft_config = get_lora_adapter(model, config)
     else:
         peft_config = None
 
     logger.info("Starting Full Model Training...")
-    trainer = build_trainer(cfg, model, peft_config, tokenizer, train_dataset, eval_dataset)
+    trainer = build_trainer(config, model, peft_config, tokenizer, train_dataset, eval_dataset)
 
     trainer.train()
 

@@ -5,85 +5,80 @@ import importlib
 import sys
 import inspect
 
-
-
-def build_trainer_args(cfg: dict):
+def build_trainer_args(config: dict):
 
     lr_scheduler=SchedulerType.COSINE
 
     # Build Main Invariant Training Arguments
     trainer_kwargs = {
         # Training Length Args
-        "max_steps": int(cfg['max_steps']),
-        "logging_steps": int(cfg['logging_steps']),
+        'max_steps': int(config['max_steps']),
+        'logging_steps': int(config['logging_steps']),
 
         # Optimizer Args
-        "optim": cfg['optimizer'],
-        "weight_decay": float(cfg['weight_decay']),
-        "gradient_checkpointing": cfg['gradient_checkpointing'],
-        "gradient_checkpointing_kwargs": {'use_reentrant':False},
+        'optim': config['optimizer'],
+        'weight_decay': float(config['weight_decay']),
+        'gradient_checkpointing': config['gradient_checkpointing'],
+        'gradient_checkpointing_kwargs': {'use_reentrant':False},
 
         # LR Args
-        "learning_rate": float(cfg['learning_rate']),
-        "lr_scheduler_type": lr_scheduler,
-        "warmup_steps": cfg['warmup_steps'],
+        'learning_rate': float(config['learning_rate']),
+        'lr_scheduler_type': lr_scheduler,
+        'warmup_steps': config['warmup_steps'],
 
         # Batch and Memory Args
-        "per_device_train_batch_size": int(cfg['micro_batch_size']),
-        "per_device_eval_batch_size": int(cfg['micro_batch_size']),
-        "gradient_accumulation_steps": int(cfg['gradient_accumulation_steps']),
+        'per_device_train_batch_size': int(config['micro_batch_size']),
+        'per_device_eval_batch_size': int(config['micro_batch_size']),
+        'gradient_accumulation_steps': int(config['gradient_accumulation_steps']),
 
         # Evaluation and Saving Args
-        "eval_strategy": 'steps', 
-        "save_strategy": 'best',
-        "eval_steps": int(cfg['eval_steps']),
-        "save_steps": int(cfg['save_steps']),
-        "save_total_limit": int(cfg['save_total_limit']),
+        'eval_strategy': 'steps', 
+        'save_strategy': 'best',
+        'eval_steps': int(config['eval_steps']),
+        'save_steps': int(config['save_steps']),
+        'save_total_limit': int(config['save_total_limit']),
 
         # Best Metric Args
-        "metric_for_best_model": cfg['metric_for_best_model'],
-        "load_best_model_at_end": True,
+        'metric_for_best_model': config['metric_for_best_model'],
+        'load_best_model_at_end': True,
 
         # Optimization Args
-        "bf16": True,
-        "use_liger_kernel": cfg['use_liger_kernel'],
-        "auto_find_batch_size": True,
+        'bf16': True,
+        'use_liger_kernel': config['use_liger_kernel'],
+        'auto_find_batch_size': True,
 
         # Misc Args
-        "output_dir": cfg['output_dir'],
-        "report_to": "wandb"
+        'output_dir': config['output_dir'],
+        'report_to': "wandb"
     }
 
     # Training Type Specific Args
     type_spec_args = {}
-    if cfg["rl"] == "dpo":
+    if config['rl'] == "sft":
         type_spec_args = {
-            'beta': float(cfg['beta']),
-            'label_smoothing': float(cfg['label_smoothing']),
-            "greater_is_better": False,
+            'greater_is_better': False,
+            'packing': config['packing'],
+            'eval_packing': config['packing'],
+            'neftune_noise_alpha': 5 
         }
-    elif cfg["rl"] == "grpo":
+    elif config['rl'] == "dpo":
         type_spec_args = {
-            'beta': float(cfg['beta']),
-            'num_generations': int(cfg["trl"]["num_generations"]),
-            'max_completion_length': int(cfg["trl"]["max_completion_length"]),
-            'reward_weights': cfg["trl"]["reward_weights"],
+            'beta': float(config['beta']),
+            'label_smoothing': float(config['label_smoothing']),
+            'greater_is_better': False,
+        }
+    elif config['rl'] == "grpo":
+        type_spec_args = {
+            'beta': float(config['beta']),
+            'num_generations': int(config['trl']['num_generations']),
+            'max_completion_length': int(config['trl']['max_completion_length']),
+            'reward_weights': config['trl']['reward_weights'],
             'use_vllm': False,
-            'loss_type': 'dr_grpo',
+            'loss_type': "dr_grpo",
             'mask_truncated_completions': True,
             'greater_is_better': True,
             'gradient_checkpointing': False,
         }
-    else:
-        type_spec_args = {
-            "greater_is_better": False,
-            "packing": cfg['packing'],
-            "eval_packing": cfg['packing'],   
-        }
-        if cfg['use_neftune']:
-            type_spec_args |= {
-                "neftune_noise_alpha": 5
-            }
 
     trainer_kwargs |= type_spec_args
 
@@ -95,12 +90,12 @@ CONFIG_DIR = os.path.abspath("/workspace/configs/")
 
 
 ##### Custom Funcs for getting GRPO reward functions #####
-def reward_functions(cfg):
+def reward_functions(config):
     """
     Collects and returns a list of functions for GRPOTrainer.
     """
     funcs = []
-    for fqn in cfg['trl']['reward_funcs']:
+    for fqn in config['trl']['reward_funcs']:
         funcs.append(get_reward_func(fqn))
     return funcs
 
