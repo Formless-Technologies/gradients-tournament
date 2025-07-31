@@ -66,7 +66,22 @@ def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds
     #####################################
     logger = setup_logger()
     logger.info("Initializing Trainer")
-    if config["rl"] == "dpo":
+    # SFT
+    if config['rl'] == "sft":
+        trainer_args = SFTConfig(
+            **trainer_kwargs,
+        )
+        return SFTTrainer(
+            model=model,
+            args=trainer_args,
+            train_dataset=train_ds,
+            eval_dataset=eval_ds,
+            processing_class=tokenizer,
+            callbacks=callbacks,
+            peft_config=peft_config
+        )
+    # DPO
+    if config['rl'] == "dpo":
         trainer_args = DPOConfig(
             **trainer_kwargs,
         )
@@ -80,7 +95,8 @@ def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds
             callbacks=callbacks,
             peft_config=peft_config
         )
-    elif config["rl"] == "grpo":
+    # GRPO
+    elif config['rl'] == "grpo":
         trainer_args = GRPOConfig(
             **trainer_kwargs,
         )
@@ -94,19 +110,7 @@ def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds
             callbacks=callbacks,
             peft_config=peft_config
         )
-    else:
-        trainer_args = SFTConfig(
-            **trainer_kwargs,
-        )
-        return SFTTrainer(
-            model=model,
-            args=trainer_args,
-            train_dataset=train_ds,
-            eval_dataset=eval_ds,
-            processing_class=tokenizer,
-            callbacks=callbacks,
-            peft_config=peft_config
-        )
+        
 
 
 def run_training(config_path: str) -> None:
