@@ -83,6 +83,32 @@ def patch_model_metadata(output_dir: str, base_model_id: str):
         pass
 
 
+def run_hpo(config_path: str):
+    cmd = [
+        "python", 
+        "/workspace/training/hpo.py", 
+        "--config", config_path
+    ]
+    
+    # Run the command
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
+
+    for line in process.stdout:
+        print(line, end="", flush=True)
+
+    return_code = process.wait()
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, cmd)
+
+    print("HPO subprocess completed successfully.", flush=True)
+
+
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
     parser = argparse.ArgumentParser(description="Text Model Training Script")
@@ -125,6 +151,9 @@ async def main():
     # Build Config File
     config_path = f"/workspace/configs/{args.task_id}.yml"
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
+
+    # Run HPO and write best config to _best.yml
+    #run_hpo(config_path)
 
     # Start Training
     path_to_train_file = "/workspace/training/train.py"
