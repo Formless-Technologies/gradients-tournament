@@ -160,34 +160,23 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     model_path = f"/cache/models/{model.replace('/', '--')}"
     config["base_model"] = model_path
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
-        config["special_tokens"] = {"pad_token": tokenizer.eos_token}
-
+    # Get model parameter count
     config["model_params_count"] = None
     model_size = re.search(r"(\d+)(?=[bB])", model)
     model_size = int(model_size.group(1)) * 1_000_000_000 if model_size else None
     print(f"Model size from regex: {model_size}")
     config["model_params_count"] = model_size
 
-    
+    # Model specific configs
     if any(k in model.lower() for k in ("meta-llama-3.1")):
         config["packing"] = False
         config["use_liger_kernel"] = False
-    config["base_model_config"] = model
-    config["hub_model_id"] = f"{expected_repo_name or str(uuid.uuid4())}"
 
     # Calculate sequence length
-    hf_cfg = AutoConfig.from_pretrained(model_path)
-    max_pos = getattr(hf_cfg, "max_position_embeddings", None) or getattr(hf_cfg, "n_ctx", None)
-
-    desired_len = config["sequence_len"]
-    if max_pos is not None and desired_len > max_pos:
-        print(f"Requested seq_len={desired_len} > model max {max_pos}; falling back to {max_pos}")
-        config["sequence_len"] = max_pos
-        print(f"Sequence Length set to: {max_pos}")
-    else:
-        config["sequence_len"] = desired_len
+    model_config = AutoConfig.from_pretrained(model_path)
+    model_max_sequence_length = model_config.max_position_embeddings
+    largest_trainable_sequence_length = config["sequence_len"]
+    config["sequence_len"] = min(model_max_sequence_length, largest_trainable_sequence_length)
 
     return config
 
