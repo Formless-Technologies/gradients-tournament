@@ -176,7 +176,6 @@ async def main():
             path_to_train_file,
             "--config", str(config_path),
         ]
-
     try:
         print("Starting training subprocess...\n", flush=True)
         process = subprocess.Popen(

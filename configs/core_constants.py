@@ -23,11 +23,11 @@ VALIDATOR_DOCKER_IMAGE_DIFFUSION = "diagonalge/tuning_validator_diffusion:latest
 
 CONTAINER_EVAL_RESULTS_PATH = "/aplp/evaluation_results.json"
 
-CONFIG_DIR = "/workspace/configs/"
-OUTPUT_DIR = "/workspace/outputs/"
+CONFIG_DIR = "workspace/scripts/configs/"
+OUTPUT_DIR = "workspace/outputs/"
 CACHE_DIR = "~/.cache/huggingface"
 CACHE_DIR_HUB = os.path.expanduser("~/.cache/huggingface/hub")
-DIFFUSION_DATASET_DIR = "core/dataset/images"
+DIFFUSION_DATASET_DIR = "workspace/dataset/images"
 CONTAINER_FLUX_PATH = "/app/flux/unet"
 
 DIFFUSION_SDXL_REPEATS = 10
