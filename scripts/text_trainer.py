@@ -14,14 +14,46 @@ import uuid
 import torch
 import pathlib
 import yaml
+import re
+import gc
+import time
+import psutil
 from transformers import AutoTokenizer
 from datetime import datetime, timedelta, timezone
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
-from configs.serverless_config_handler import setup_config
+from configs.serverless_config_handler import setup_config, add_throughput_information
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
+
+
+GPU_CLEANUP_WAIT_TIME = 5  # seconds
+def cleanup_resources():
+    """
+    Force cleanup of GPU/CPU memory and zombie child processes.
+    Mirrors the logic used in HPO to stabilize repeated launches.
+    """
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        gc.collect()
+        current_process = psutil.Process()
+        for child in current_process.children(recursive=True):
+            try:
+                child.terminate()
+            except psutil.NoSuchProcess:
+                pass
+        time.sleep(2)  # give processes time to terminate
+        for child in current_process.children(recursive=True):
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+    except Exception as e:
+        print(f"Resource cleanup error: {e}", flush=True)
 
 
 def patch_wandb_symlinks(base_dir: str):
@@ -122,6 +154,168 @@ def run_hpo(config_path: str):
         return None
 
 
+def run_probe(base_config_path: str, minutes: int = 5):
+    """
+    Run a short time-limited training to estimate steps-per-minute using the base YAML config.
+    The throughput is computed over the LAST 80% of the probe duration to reduce warmup bias.
+
+    This implementation parses tqdm progress lines (e.g.,
+      "  0%|          | 130/1000000000 [04:48<...,  2.19s/it]")
+    to extract (step, elapsed_time) pairs, which are printed even when HF logging lines
+    are buffered until the end.
+
+    Args:
+        base_config_path: Path to the base YAML config to use for the probe.
+        minutes: Duration of the probe (default 5 minutes).
+
+    Returns:
+        steps_per_minute: float
+    """
+    # Load base config and build a probe variant
+    with open(base_config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    probe_cfg = dict(cfg)
+
+    # Make time the limiter
+    now = datetime.now(timezone.utc)
+    probe_cfg["required_finish_time"] = (now + timedelta(minutes=minutes)).isoformat()
+
+    # Isolate output directory to avoid interfering with real checkpoints
+    out_dir = probe_cfg.get("output_dir", f"/app/checkpoints/{uuid.uuid4().hex}")
+    probe_cfg["output_dir"] = os.path.join(out_dir, "probe")
+
+    # Avoid checkpointing overhead during probe; increase step cap; disable eval; increase logging frequency
+    probe_cfg["max_steps"] = int(1e9)
+    probe_cfg["save_steps"] = int(1e9)
+    probe_cfg["eval_steps"] = int(1e9)
+    probe_cfg["save_total_limit"] = 1
+    try:
+        probe_cfg["logging_steps"] = min(int(probe_cfg.get("logging_steps", 10)), 10)
+    except Exception:
+        probe_cfg["logging_steps"] = 10
+
+    # Write the probe config alongside the base config
+    probe_cfg_path = base_config_path.replace(".yml", "_probe.yml")
+    with open(probe_cfg_path, "w") as f:
+        yaml.safe_dump(probe_cfg, f)
+
+    # Build the accelerate command (mirror scripts/text_trainer launching approach)
+    path_to_train_file = "/workspace/training/train.py"
+    num_gpus = torch.cuda.device_count()
+    if num_gpus == 1:
+        training_command = [
+            "accelerate", "launch",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(num_gpus),
+            path_to_train_file,
+            "--config", str(probe_cfg_path),
+        ]
+    else:
+        training_command = [
+            "accelerate", "launch",
+            "--multi_gpu",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(num_gpus),
+            path_to_train_file,
+            "--config", str(probe_cfg_path),
+        ]
+
+    # Regex for tqdm lines: capture current step and elapsed time inside [...]
+    # Example matched: "  0%| ... | 130/1000000000 [04:48<...,  2.19s/it]"
+    tqdm_re = re.compile(r"\s*\d+%.*\|\s*(\d+)/(\d+).*?\[([0-9:]+)<")
+
+    def _elapsed_to_seconds(token: str) -> float | None:
+        # token is "MM:SS" or "HH:MM:SS"
+        parts = token.strip().split(":")
+        try:
+            parts = [int(p) for p in parts]
+        except Exception:
+            return None
+        if len(parts) == 2:
+            mm, ss = parts
+            return mm * 60 + ss
+        if len(parts) == 3:
+            hh, mm, ss = parts
+            return hh * 3600 + mm * 60 + ss
+        return None
+
+    # Keep last observed (elapsed_seconds, step) and baseline after warmup
+    last_step = None
+    last_elapsed_sec = None
+    baseline_step = None
+    baseline_elapsed_sec = None
+
+    warmup_seconds = max(0.0, minutes * 60.0 * 0.2)  # first 20% is warmup
+
+    process = subprocess.Popen(
+        training_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
+
+    return_code = 0
+    try:
+        for line in process.stdout:
+            print(line, end="", flush=True)
+
+            # Parse tqdm progress
+            m = tqdm_re.search(line)
+            if m:
+                try:
+                    cur_step = int(m.group(1))
+                    elapsed_tok = m.group(3)
+                    elapsed_sec = _elapsed_to_seconds(elapsed_tok)
+                except Exception:
+                    cur_step, elapsed_sec = None, None
+
+                if elapsed_sec is not None and cur_step is not None:
+                    last_step = cur_step
+                    last_elapsed_sec = elapsed_sec
+                    if baseline_step is None and elapsed_sec >= warmup_seconds:
+                        baseline_step = cur_step
+                        baseline_elapsed_sec = elapsed_sec
+
+        return_code = process.wait()
+    finally:
+        # Ensure process is terminated and resources are cleaned up (like HPO)
+        try:
+            if process and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except Exception:
+                    process.kill()
+        except Exception:
+            pass
+
+        cleanup_resources()
+        time.sleep(GPU_CLEANUP_WAIT_TIME)
+
+    # Compute throughput over the last 80% (post-warmup)
+    steps_per_minute = None
+    if last_step is not None and last_elapsed_sec is not None:
+        if baseline_step is None or baseline_elapsed_sec is None:
+            # No sample past warmup, use earliest we have as baseline
+            baseline_step = baseline_step if baseline_step is not None else 0
+            baseline_elapsed_sec = baseline_elapsed_sec if baseline_elapsed_sec is not None else 0.0
+
+        time_delta_min = max(1e-6, (last_elapsed_sec - baseline_elapsed_sec) / 60.0)
+        step_delta = max(0, int(last_step) - int(baseline_step))
+        steps_per_minute = float(step_delta) / time_delta_min
+
+    # As a last resort, return 0.0 to avoid crashing callers
+    if steps_per_minute is None:
+        steps_per_minute = 0.0
+
+    if return_code != 0:
+        print(f"Probe subprocess exited with code {return_code} (continuing with collected metrics).", flush=True)
+
+    return steps_per_minute
+
+    
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
     parser = argparse.ArgumentParser(description="Text Model Training Script")
@@ -166,6 +360,21 @@ async def main():
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
 
+    # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
+    print("--- STARTING THROUGHPUT PROBE ---\n", flush=True)
+
+    steps_per_minute = run_probe(config_path, minutes=2)
+
+    # Modify config to pass steps per minute
+    if steps_per_minute != 0.0:
+        print(f"THROUGHPUT FOUND: {steps_per_minute} spm\n", flush=True)
+        add_throughput_information(config_path, steps_per_minute)
+    else:
+        print(f"THROUGHPUT NOT FOUND DURING PROBE\n", flush=True)
+        add_throughput_information(config_path, 0.0)
+    
+    time.sleep(3)
+
     print("--- STARTING HPO PIPELINE ---\n", flush=True)
 
     # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
@@ -179,6 +388,9 @@ async def main():
             print("HPO completed but no _best.yml found; using base config.", flush=True)
     except Exception as e:
         print(f"HPO failed: {e}. Falling back to base config.\n", flush=True)
+
+
+    time.sleep(3)
 
     print("--- STARTING FULL TRAINING RUN ---\n", flush=True)
 

@@ -34,8 +34,6 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-
-
 def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds):
 
     #### Callbacks ####
@@ -133,6 +131,11 @@ def run_training(config_path: str) -> None:
         peft_config = None
 
     trainer = build_trainer(config, model, peft_config, tokenizer, train_dataset, eval_dataset)
+
+    print(f"Starting Training with: \n")
+    print(f"Max Steps: {config['max_steps']}\n")
+    print(f"Eval Steps: {config['eval_steps']}\n")
+    print(f"Learning Rate: {config['learning_rate']}\n")
 
     trainer.train()
 

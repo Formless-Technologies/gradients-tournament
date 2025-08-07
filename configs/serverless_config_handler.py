@@ -192,6 +192,14 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
 
     return config
 
+def add_throughput_information(config_path: str, steps_per_minute: float):
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+
+    config['steps_per_minute'] = steps_per_minute
+
+    save_config(config, config_path)
+
 
 def setup_config(
     dataset: str,

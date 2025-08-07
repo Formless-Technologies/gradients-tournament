@@ -3,11 +3,35 @@ from trl.trainer.grpo_trainer import RewardFunc
 import os
 import importlib
 import sys
+import math
 import inspect
+from datetime import datetime, timedelta, timezone
 
 def build_trainer_args(config: dict):
 
     lr_scheduler=SchedulerType.COSINE
+
+    if config['steps_per_minute'] != 0.0:
+        # Calculate max steps based on steps_per_minute and required_finish_time
+        if config['rl'] == "sft":
+            MAX_STEP_EVAL_BUFFER = 0.9 # Assume 10% of time for sft eval steps
+            TARGET_NUM_EVALS = 10
+        elif config['rl'] == "dpo":
+            MAX_STEP_EVAL_BUFFER = 0.85 # Assume 15% of time for dpo eval steps
+            TARGET_NUM_EVALS = 8
+        else:
+            MAX_STEP_EVAL_BUFFER = 0.75 # Assume 25% of time for grpo eval steps
+            TARGET_NUM_EVALS = 6
+        
+        steps_per_minute = config['steps_per_minute']
+        time_remaining = datetime.fromisoformat(config['required_finish_time']) - datetime.now(timezone.utc)
+        minutes_remaining = max(0.0, time_remaining.total_seconds()) / 60
+        approx_max_steps = math.floor(steps_per_minute * minutes_remaining * MAX_STEP_EVAL_BUFFER)
+        approx_eval_steps = max(10, approx_max_steps // TARGET_NUM_EVALS)
+        approx_save_steps = approx_eval_steps
+        config['max_steps'] = approx_max_steps
+        config['eval_steps'] = approx_eval_steps
+        config['save_steps'] = approx_save_steps
 
     # Build Main Invariant Training Arguments
     trainer_kwargs = {
@@ -24,7 +48,7 @@ def build_trainer_args(config: dict):
         # LR Args
         'learning_rate': float(config['learning_rate']),
         'lr_scheduler_type': lr_scheduler,
-        'warmup_steps': config['warmup_steps'],
+        'warmup_ratio': config['warmup_ratio'],
 
         # Batch and Memory Args
         'per_device_train_batch_size': int(config['micro_batch_size']),

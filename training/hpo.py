@@ -18,19 +18,15 @@ from contextlib import contextmanager
 testing = True
 
 MAX_TRIALS_TO_RUN = 10
-TRIAL_MAX_STEPS = 120
-TRIAL_EVAL_STEPS = 60
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 15
-GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
+GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 if testing:
-    MAX_TRIALS_TO_RUN = 4
-    TRIAL_MAX_STEPS = 20
-    TRIAL_EVAL_STEPS = 10
+    MAX_TRIALS_TO_RUN = 3
     PERCENT_TIME_FOR_HPO = 0.25
-    MAX_MINUTES_PER_TRIAL = 15
-    GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
+    MAX_MINUTES_PER_TRIAL = 3
+    GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 
 # ╭──────────────────────── Hyper‑parameter space ───────────────────────────╮
@@ -130,8 +126,6 @@ def objective(
     out_dir = f"./hpo_runs/{trial_id}"
     cfg |= {
         "output_dir": str(out_dir),
-        "max_steps": TRIAL_MAX_STEPS,
-        "eval_steps": TRIAL_EVAL_STEPS,
         "save_steps": 500,
         "logging_steps": 10,  # More frequent logging for monitoring
         "save_total_limit": 1,  # Save disk space
@@ -185,7 +179,7 @@ def objective(
         # Capture stdout, stream metrics, and report to Optuna for pruning
         stdout_lines = []
         eval_counter = 0
-        max_rungs = max(2, int(TRIAL_MAX_STEPS / TRIAL_EVAL_STEPS))
+        max_rungs = 10
         for line in process.stdout:
             print(line, end="", flush=True)
             stdout_lines.append(line)
@@ -289,7 +283,6 @@ def run_optuna(base_cfg_path: str) -> dict:
         direction = "minimize"
 
     # Create study with more aggressive pruning for stability
-    max_rungs = max(2, int(TRIAL_MAX_STEPS / TRIAL_EVAL_STEPS))
     study = optuna.create_study(
         direction=direction,
         study_name=base_cfg["task_id"],
@@ -297,7 +290,7 @@ def run_optuna(base_cfg_path: str) -> dict:
         storage=storage,
         pruner=HyperbandPruner(
             min_resource=1,  # Allow earliest pruning at first rung
-            max_resource=max_rungs,
+            max_resource=10,
             reduction_factor=3
         )
     )

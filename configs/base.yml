@@ -26,9 +26,10 @@ metric_for_best_model: eval_loss
 max_steps: 6000
 save_steps: 500
 eval_steps: 500
-warmup_steps: 100
+warmup_ratio: 0.05
 logging_steps: 10
 save_total_limit: 3
+steps_per_minute: 0.0
 
 cleanlab: true               # turn filtering on/off
 cleanlab_keep_frac: 0.90    # keep top-92 % (empirically sweet spot)
