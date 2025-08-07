@@ -191,7 +191,7 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     if architecture.lower() in liger_model_architectures:
         config["use_liger_kernel"] = True
     else:
-        config["use_liger_kernel"] = True
+        config["use_liger_kernel"] = False
 
     return config
 
