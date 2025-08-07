@@ -84,12 +84,16 @@ def patch_model_metadata(output_dir: str, base_model_id: str):
 
 
 def run_hpo(config_path: str):
+    """
+    Launch the HPO pipeline. If it produces a _best.yml config, return that path.
+    If no best config is produced, return None. Raises on subprocess failure.
+    """
     cmd = [
-        "python", 
-        "/workspace/training/hpo.py", 
+        "python",
+        "/workspace/training/hpo.py",
         "--config", config_path
     ]
-    
+
     # Run the command
     process = subprocess.Popen(
         cmd,
@@ -107,6 +111,15 @@ def run_hpo(config_path: str):
         raise subprocess.CalledProcessError(return_code, cmd)
 
     print("HPO subprocess completed successfully.", flush=True)
+
+    # Check for optimised config emitted by HPO script
+    best_cfg_path = config_path.replace(".yml", "_best.yml")
+    if os.path.exists(best_cfg_path):
+        print(f"Found optimised config: {best_cfg_path}", flush=True)
+        return best_cfg_path
+    else:
+        print("No optimised _best.yml found; will fall back to base config.", flush=True)
+        return None
 
 
 async def main():
@@ -152,8 +165,19 @@ async def main():
     config_path = f"/workspace/configs/{args.task_id}.yml"
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
-    # Run HPO and write best config to _best.yml
-    #run_hpo(config_path)
+    # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
+    selected_config_path = config_path
+    try:
+        best_cfg_path = run_hpo(config_path)
+        if best_cfg_path:
+            selected_config_path = best_cfg_path
+            print(f"Using HPO-optimized config: {best_cfg_path}", flush=True)
+        else:
+            print("HPO completed but no _best.yml found; using base config.", flush=True)
+    except Exception as e:
+        print(f"HPO failed: {e}. Falling back to base config.", flush=True)
+
+    print("Starting Full Training Run.....")
 
     # Start Training
     path_to_train_file = "/workspace/training/train.py"
@@ -164,7 +188,7 @@ async def main():
             "--mixed_precision", "bf16",
             "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
             path_to_train_file,
-            "--config", str(config_path),
+            "--config", str(selected_config_path),
         ]
 
     else:
@@ -174,7 +198,7 @@ async def main():
             "--mixed_precision", "bf16",
             "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
             path_to_train_file,
-            "--config", str(config_path),
+            "--config", str(selected_config_path),
         ]
     try:
         print("Starting training subprocess...\n", flush=True)

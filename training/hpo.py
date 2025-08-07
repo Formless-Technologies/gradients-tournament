@@ -38,8 +38,8 @@ def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
     # SFT Params
     if cfg["rl"] == "sft":
         params |= {
-            "learning_rate": trial.suggest_float("learning_rate", 2e-5, 2e-4, log=True),
-            "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.15),
+            "learning_rate": trial.suggest_float("learning_rate", 5e-6, 2e-4, log=True),
+            "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.1),
             "use_neftune": trial.suggest_categorical("use_neftune", [True, False]),
         }
     # DPO Params
@@ -47,7 +47,7 @@ def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
         params |= {
             "learning_rate": trial.suggest_float("learning_rate", 1e-7, 1e-5, log=True),
             "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.05),
-            "beta": trial.suggest_float("beta", 0.01, 0.5, log=True),
+            "beta": trial.suggest_float("beta", 0.02, 0.5, log=True),
             "label_smoothing": trial.suggest_float("label_smoothing", 0.0, 0.2),
         }
     # GRPO Params
@@ -61,8 +61,8 @@ def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
     # LORA Params
     if cfg["adapter"] == "lora":
         params |= {
-            "lora_r": trial.suggest_int("lora_r", 16, 1024, step=16),
-            "lora_alpha": trial.suggest_int("lora_alpha", 16, 1024, step=16),
+            "lora_r": trial.suggest_int("lora_r", 16, 128, step=16),
+            "lora_alpha": trial.suggest_int("lora_alpha", 16, 256, step=16),
             "lora_dropout": trial.suggest_float("lora_dropout", 0.0, 0.1),
         }
 
@@ -297,10 +297,6 @@ def write_best_cfg(base_cfg: str, best: dict) -> str:
     with open(base_cfg) as f:
         cfg = yaml.safe_load(f)
     cfg.update(best)
-    
-    # Add stability configurations for full training
-    cfg["dataloader_pin_memory"] = False  # Avoid potential memory issues
-    cfg["dataloader_num_workers"] = 0  # Avoid multiprocessing issues
     
     opt_path = base_cfg.replace(".yml", "_best.yml")
     with open(opt_path, "w") as f:
