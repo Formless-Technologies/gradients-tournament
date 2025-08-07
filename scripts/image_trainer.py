@@ -15,12 +15,102 @@ from configs.training_paths import ImageModelType
 import shutil
 import zipfile
 import toml
+import time
 
 
 # Add project root to python path to import modules
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
+
+
+def get_available_vram_gb() -> float:
+    """Detect available GPU VRAM in GB with multiple fallbacks."""
+    # Try torch
+    try:
+        import torch  # local import to avoid hard dependency when CPU-only
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            return round(props.total_memory / (1024 ** 3), 1)
+    except Exception:
+        pass
+    # Try nvidia-smi
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
+        )
+        out = (result.stdout or "").strip().splitlines()
+        if out:
+            return round(float(out[0]), 1)
+    except Exception:
+        pass
+    # Fallback safe default
+    return 12.0
+
+
+def parse_resolution(reso: str) -> tuple[int, int]:
+    try:
+        w, h = reso.split(",")
+        return int(w.strip()), int(h.strip())
+    except Exception:
+        return (1024, 1024)
+
+
+def choose_batch_settings(vram_gb: float, resolution: tuple[int, int], model_type: str) -> tuple[int, int]:
+    """Heuristic mapping from VRAM and resolution to (train_batch_size, gradient_accumulation_steps)."""
+    max_dim = max(resolution)
+    if vram_gb >= 39:
+        bs = 48
+    elif vram_gb >= 23:
+        bs = 32
+    elif vram_gb >= 15:
+        bs = 24
+    elif vram_gb >= 11:
+        bs = 16
+    elif vram_gb >= 9:
+        bs = 8
+    else:
+        bs = 2
+
+    if max_dim > 1024:
+        bs = max(1, bs - 1)
+
+    return int(bs), 1
+
+
+def adjust_config_for_memory(config: dict, model_type: str, vram_gb: float) -> dict:
+    """Mutate config with VRAM-aware settings; return the config."""
+    reso_str = config.get("resolution", "1024,1024")
+    reso = parse_resolution(reso_str)
+    bs, gas = choose_batch_settings(vram_gb, reso, model_type)
+    config["train_batch_size"] = int(bs)
+    config["gradient_accumulation_steps"] = int(gas)
+
+    # Low-VRAM resolution/bucket fallbacks
+    if vram_gb < 10:
+        config["resolution"] = "768,768"
+        config["max_bucket_reso"] = min(int(config.get("max_bucket_reso", 1024)), 1024)
+        config["bucket_reso_steps"] = min(int(config.get("bucket_reso_steps", 64)), 32)
+    if vram_gb < 8:
+        config["resolution"] = "640,640"
+        config["max_bucket_reso"] = min(int(config.get("max_bucket_reso", 896)), 896)
+
+    return config
+
+
+def update_config_file_inplace(config_path: str, updater_fn):
+    """Load toml config, apply updater, write back, and return new dict."""
+    with open(config_path, "r") as f:
+        cfg = toml.load(f)
+    cfg = updater_fn(cfg)
+    save_config_toml(cfg, config_path)
+    return cfg
+
+
+def _line_has_oom(s: str) -> bool:
+    s = s.lower()
+    return ("out of memory" in s) or ("cuda oom" in s) or ("cuda error: out of memory" in s)
 
 
 def prepare_dataset(
@@ -100,13 +190,21 @@ def create_config(task_id, model, model_type, expected_repo_name):
     with open(config_template_path, "r") as file:
         config = toml.load(file)
 
-    # Update config
+    # Update basic paths
     config["pretrained_model_name_or_path"] = model
     config["train_data_dir"] = train_paths.get_image_training_images_dir(task_id)
     output_dir = train_paths.get_checkpoints_output_path(task_id, expected_repo_name)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     config["output_dir"] = output_dir
+
+    # Detect VRAM and adjust memory-related settings
+    vram_gb = get_available_vram_gb()
+    print(f"[auto-config] Detected VRAM ≈ {vram_gb} GB", flush=True)
+    config = adjust_config_for_memory(config, model_type, vram_gb)
+    print(f"[auto-config] Using train_batch_size={config.get('train_batch_size')} "
+          f"gradient_accumulation_steps={config.get('gradient_accumulation_steps')} "
+          f"resolution={config.get('resolution')} max_bucket_reso={config.get('max_bucket_reso')}", flush=True)
 
     # Save config to file
     config_path = os.path.join(train_cst.IMAGE_CONTAINER_CONFIG_SAVE_PATH, f"{task_id}.toml")
@@ -118,42 +216,99 @@ def create_config(task_id, model, model_type, expected_repo_name):
 def run_training(model_type, config_path):
     print(f"Starting training with config: {config_path}", flush=True)
 
-    training_command = [
-        "accelerate", "launch",
-        "--dynamo_backend", "no",
-        "--dynamo_mode", "default",
-        "--mixed_precision", "bf16",
-        "--num_processes", "1",
-        "--num_machines", "1",
-        "--num_cpu_threads_per_process", "2",
-        f"/app/sd-scripts/{model_type}_train_network.py",
-        "--config_file", config_path
-    ]
+    max_retries = 3
+    attempt = 0
 
-    try:
-        print("Starting training subprocess...\n", flush=True)
-        process = subprocess.Popen(
-            training_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
+    while attempt <= max_retries:
+        training_command = [
+            "accelerate", "launch",
+            "--dynamo_backend", "no",
+            "--dynamo_mode", "default",
+            "--mixed_precision", "bf16",
+            "--num_processes", "1",
+            "--num_machines", "1",
+            "--num_cpu_threads_per_process", "2",
+            f"/app/sd-scripts/{model_type}_train_network.py",
+            "--config_file", config_path
+        ]
 
-        for line in process.stdout:
-            print(line, end="", flush=True)
+        try:
+            print(f"Starting training subprocess (attempt {attempt + 1}/{max_retries + 1})...\n", flush=True)
+            process = subprocess.Popen(
+                training_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
 
-        return_code = process.wait()
-        if return_code != 0:
-            raise subprocess.CalledProcessError(return_code, training_command)
+            lines = []
+            oom_seen = False
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                lines.append(line)
+                if not oom_seen and _line_has_oom(line):
+                    oom_seen = True
 
-        print("Training subprocess completed successfully.", flush=True)
+            return_code = process.wait()
+            if return_code == 0 and not oom_seen:
+                print("Training subprocess completed successfully.", flush=True)
+                return
 
-    except subprocess.CalledProcessError as e:
-        print("Training subprocess failed!", flush=True)
-        print(f"Exit Code: {e.returncode}", flush=True)
-        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
-        raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
+            # Handle OOM and retry by shrinking memory footprint
+            combined = "".join(lines)
+            if oom_seen or _line_has_oom(combined):
+                attempt += 1
+                if attempt > max_retries:
+                    print("OOM persisted after maximum retries.", flush=True)
+                    raise subprocess.CalledProcessError(return_code or 1, training_command)
+
+                def updater(cfg: dict):
+                    bs = int(cfg.get("train_batch_size", 1))
+                    gas = int(cfg.get("gradient_accumulation_steps", 1))
+                    if bs > 1:
+                        new_bs = max(1, bs // 2)
+                        print(f"[retry {attempt}] Reducing train_batch_size {bs} -> {new_bs}", flush=True)
+                        cfg["train_batch_size"] = new_bs
+                    else:
+                        new_gas = gas + 1
+                        print(f"[retry {attempt}] Increasing gradient_accumulation_steps {gas} -> {new_gas}", flush=True)
+                        cfg["gradient_accumulation_steps"] = new_gas
+                        # Step down resolution gradually
+                        reso = cfg.get("resolution", "1024,1024")
+                        w, h = parse_resolution(reso)
+                        if max(w, h) > 768:
+                            cfg["resolution"] = "768,768"
+                            cfg["max_bucket_reso"] = min(int(cfg.get("max_bucket_reso", 1024)), 1024)
+                            cfg["bucket_reso_steps"] = min(int(cfg.get("bucket_reso_steps", 64)), 32)
+                            print(f"[retry {attempt}] Reducing resolution to {cfg['resolution']} and max_bucket_reso={cfg['max_bucket_reso']}", flush=True)
+                        elif max(w, h) > 640:
+                            cfg["resolution"] = "640,640"
+                            cfg["max_bucket_reso"] = min(int(cfg.get("max_bucket_reso", 896)), 896)
+                            print(f"[retry {attempt}] Reducing resolution to {cfg['resolution']} and max_bucket_reso={cfg['max_bucket_reso']}", flush=True)
+                        else:
+                            cfg["resolution"] = "512,512"
+                            cfg["max_bucket_reso"] = min(int(cfg.get("max_bucket_reso", 768)), 768)
+                            print(f"[retry {attempt}] Reducing resolution to {cfg['resolution']} and max_bucket_reso={cfg['max_bucket_reso']}", flush=True)
+                    return cfg
+
+                update_config_file_inplace(config_path, updater)
+                print("[retry] Updated config to mitigate OOM; restarting training...", flush=True)
+                time.sleep(1.0)
+                continue
+
+            # If non-OOM error, raise as before
+            if return_code != 0:
+                raise subprocess.CalledProcessError(return_code, training_command)
+
+            print("Training subprocess completed successfully.", flush=True)
+            return
+
+        except subprocess.CalledProcessError as e:
+            print("Training subprocess failed!", flush=True)
+            print(f"Exit Code: {e.returncode}", flush=True)
+            print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
+            raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
 
 async def main():

@@ -17,7 +17,7 @@ MODEL_TYPE="sdxl"
 # Optional: Repository name for the trained model
 EXPECTED_REPO_NAME="my-sdxl-finetuned"
 
-CHECKPOINTS_DIR="$(pwd)/secure_checkpoints"
+CHECKPOINTS_DIR="$(pwd)/secure_data"
 mkdir -p "$CHECKPOINTS_DIR"
 chmod 777 "$CHECKPOINTS_DIR"
 

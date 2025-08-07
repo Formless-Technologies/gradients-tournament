@@ -96,7 +96,7 @@ async def download_text_dataset(task_id, dataset_url, file_format, dataset_dir):
 
 async def download_image_dataset(dataset_zip_url, task_id, dataset_dir):
     os.makedirs(dataset_dir, exist_ok=True)
-    local_zip_path = f"{dataset_dir}/{task_id}.zip"
+    local_zip_path = f"{dataset_dir}/{task_id}_tourn.zip"
     print(f"Downloading dataset from: {dataset_zip_url}")
     local_path = await download_s3_file(dataset_zip_url, local_zip_path)
     print(f"Downloaded dataset to: {local_path}")
