@@ -167,8 +167,12 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
         config['packing'] = False
         config["use_liger_kernel"] = False
 
-    # Calculate sequence length
+    # Calculate sequence length and model architecture
     model_config = AutoConfig.from_pretrained(model_path)
+    architectures = model_config.architectures
+    if len(architectures) > 1:
+            config['model_architecture'] = "Multiple architectures"
+    config['model_architecture'] = architectures[0].strip().lower()
     model_max_sequence_length = model_config.max_position_embeddings
     largest_trainable_sequence_length = config['sequence_len']
     config['sequence_len'] = min(model_max_sequence_length, largest_trainable_sequence_length)
