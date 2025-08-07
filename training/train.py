@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import argparse
-import logging
 import yaml
 from datetime import datetime, timedelta, timezone
 import torch
@@ -35,12 +34,6 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def setup_logger() -> logging.Logger:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s"
-    )
-    return logging.getLogger(__name__)
 
 
 def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds):
@@ -64,8 +57,7 @@ def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds
     trainer_kwargs = build_trainer_args(config)
 
     #####################################
-    logger = setup_logger()
-    logger.info("Initializing Trainer")
+    print("Initializing Trainer")
     # SFT
     if config['rl'] == "sft":
         trainer_args = SFTConfig(
@@ -117,13 +109,12 @@ def run_training(config_path: str) -> None:
     """Run the training loop using the provided YAML config path."""
     config = load_config(config_path)
 
-    logger = setup_logger()
 
     # Performance flags
     torch.backends.cudnn.benchmark = True
     torch.cuda.empty_cache()
     
-    logger.info("Loaded config from %s", config_path)
+    print(f"Loaded config from {config_path}")
     
     # after loading config...
     tokenizer = load_tokenizer(config['base_model'], config)
@@ -145,7 +136,7 @@ def run_training(config_path: str) -> None:
     else:
         peft_config = None
 
-    logger.info("Starting Full Model Training...")
+    print("Starting Full Model Training...")
     trainer = build_trainer(config, model, peft_config, tokenizer, train_dataset, eval_dataset)
 
     trainer.train()

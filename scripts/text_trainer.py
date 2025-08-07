@@ -165,6 +165,9 @@ async def main():
     config_path = f"/workspace/configs/{args.task_id}.yml"
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
+
+    print("--- STARTING HPO PIPELINE ---", flush=True)
+
     # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
     selected_config_path = config_path
     try:
@@ -177,7 +180,7 @@ async def main():
     except Exception as e:
         print(f"HPO failed: {e}. Falling back to base config.", flush=True)
 
-    print("Starting Full Training Run.....")
+    print("--- STARTING FULL TRAINING RUN ---", flush=True)
 
     # Start Training
     path_to_train_file = "/workspace/training/train.py"
@@ -201,7 +204,6 @@ async def main():
             "--config", str(selected_config_path),
         ]
     try:
-        print("Starting training subprocess...\n", flush=True)
         process = subprocess.Popen(
             training_command,
             stdout=subprocess.PIPE,

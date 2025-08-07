@@ -4,7 +4,7 @@ hpo_optuna.py  –  1‑hour Optuna sweep → full training (multi‑GPU compati
 --------------------------------------------------------------------------
 """
 from __future__ import annotations
-import argparse, copy, json, logging, os, re, shutil, subprocess, tempfile, uuid, time
+import argparse, copy, json, os, re, shutil, subprocess, tempfile, uuid, time
 from pathlib import Path
 import yaml, optuna
 from datetime import datetime, timedelta, timezone
@@ -14,11 +14,6 @@ import gc
 import torch
 import psutil
 from contextlib import contextmanager
-
-# ── logging ────────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
-LOG = logging.getLogger("hpo_optuna")
 
 MAX_TRIALS_TO_RUN = 3
 TRIAL_MAX_STEPS = 120
@@ -96,7 +91,7 @@ def cleanup_resources():
             except psutil.NoSuchProcess:
                 pass
     except Exception as e:
-        LOG.warning(f"Resource cleanup error: {e}")
+        print(f"Resource cleanup error: {e}")
 
 
 
@@ -114,7 +109,7 @@ def objective(
     # Check if we have enough time left
     time_left = (time_when_hpo_finished - datetime.now(timezone.utc)).total_seconds()
     if time_left < 60:  # Less than 1 minute left
-        LOG.warning("Not enough time left for new trial")
+        print("Not enough time left for new trial")
         raise optuna.exceptions.OptunaError("Time limit reached")
     
     cfg = copy.deepcopy(base_cfg)
@@ -142,8 +137,6 @@ def objective(
     with tmp_cfg.open("w") as f:
         yaml.safe_dump(cfg, f)
 
-    LOG.info("Starting trial %d with params: %s", trial.number, trial_params)
-
     if cfg['rl'] == "grpo":
         cfg['trl']['max_completion_length'] = 32
 
@@ -170,7 +163,7 @@ def objective(
         ]
 
     try:
-        print("Starting training subprocess...\n", flush=True)
+        print(F"STARTING TRIAL {trial.number} with params: {trial_params} \n", flush=True)
         process = subprocess.Popen(
             training_command,
             stdout=subprocess.PIPE,
@@ -200,12 +193,12 @@ def objective(
                 try:
                     trial.report(eval_loss, step=eval_counter)
                 except Exception as _e:
-                    LOG.warning(f"Optuna report failed at rung {eval_counter}: {_e}")
+                    print(f"Optuna report failed at rung {eval_counter}: {_e}")
 
                 # Check if we should prune
                 try:
                     if trial.should_prune():
-                        LOG.info(f"Pruning trial {trial.number} at rung {eval_counter} (eval_loss={eval_loss})")
+                        print(f"Pruning trial {trial.number} at rung {eval_counter} (eval_loss={eval_loss})")
                         try:
                             process.terminate()
                             try:
@@ -218,7 +211,7 @@ def objective(
                             f"Pruned at rung {eval_counter} with eval_loss={eval_loss}"
                         )
                 except Exception as _e:
-                    LOG.warning(f"Optuna prune check failed at rung {eval_counter}: {_e}")
+                    print(f"Optuna prune check failed at rung {eval_counter}: {_e}")
 
         return_code = process.wait()
         if return_code != 0:
@@ -231,10 +224,10 @@ def objective(
         eval_loss = loss_from_stdout(full_stdout)
         
         if eval_loss is None:
-            LOG.warning("Could not extract eval_loss from stdout, using fallback value")
+            print("Could not extract eval_loss from stdout, using fallback value")
             return float("inf") if cfg["rl"] != "grpo" else float("-inf")
         
-        LOG.info(f"Trial {trial.number} completed with eval_loss: {eval_loss}")
+        print(f"Trial {trial.number} completed with eval_loss: {eval_loss}")
         return eval_loss
 
     except subprocess.CalledProcessError as e:
@@ -256,8 +249,6 @@ def run_optuna(base_cfg_path: str) -> dict:
     storage_path = f"sqlite:///{hpo_root / 'hpo.db'}"
     base_project = "Gradients"
     hpo_project  = f"{base_project}-HPO-Trials"
-
-    LOG.info("HPO sweep starting  (project: %s)…", hpo_project)
     
     # Use more robust storage settings
     storage = RDBStorage(
@@ -297,7 +288,7 @@ def run_optuna(base_cfg_path: str) -> dict:
     seconds_remaining = max(0.0, time_remaining.total_seconds() * PERCENT_TIME_FOR_HPO)
     time_when_hpo_finished = datetime.now(timezone.utc) + timedelta(seconds=seconds_remaining)
 
-    LOG.info(f"Time allocated to HPO Search: {seconds_remaining/3600:.2f}h")
+    print(f"Time allocated to HPO Search: {seconds_remaining/3600:.2f}h")
     
     # Run optimization with exception handling
     try:
@@ -310,17 +301,16 @@ def run_optuna(base_cfg_path: str) -> dict:
             callbacks=[lambda study, trial: cleanup_resources()]  # Cleanup after each trial
         )
     except Exception as e:
-        LOG.error(f"Study optimization failed: {e}")
+        print(f"Study optimization failed: {e}")
         # Try to get best value so far
         if len(study.trials) > 0:
-            LOG.info("Attempting to use best trial found so far...")
+            print("Attempting to use best trial found so far...")
         else:
             raise
 
     # Final results
     if study.best_trial:
-        LOG.info("HPO finished – best eval_loss %.5f with params %s",
-                study.best_value, study.best_params)
+        print(f"HPO finished – best eval_loss {study.best_value:.5f} with params {study.best_params}")
             
         return study.best_params
     else:
@@ -337,7 +327,7 @@ def write_best_cfg(base_cfg: str, best: dict) -> str:
     opt_path = base_cfg.replace(".yml", "_best.yml")
     with open(opt_path, "w") as f:
         yaml.safe_dump(cfg, f)
-    LOG.info("💾  Wrote optimised config → %s", opt_path)
+    print(f"💾  Wrote optimised config → {opt_path}")
     return opt_path
 
 
@@ -356,11 +346,11 @@ def main():
         optimised_cfg = write_best_cfg(args.config, best_params)
         
         # Clean pause before full training
-        LOG.info("Pausing before full training run...")
+        print("Pausing before full training run...")
         cleanup_resources()
         time.sleep(GPU_CLEANUP_WAIT_TIME * 2)
     except Exception as e:
-        LOG.error(f"HPO pipeline failed: {e}")
+        print(f"HPO pipeline failed: {e}")
         raise
 
 if __name__ == "__main__":
