@@ -166,7 +166,7 @@ async def main():
     setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
 
-    print("--- STARTING HPO PIPELINE ---", flush=True)
+    print("--- STARTING HPO PIPELINE ---\n", flush=True)
 
     # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
     selected_config_path = config_path
@@ -174,13 +174,13 @@ async def main():
         best_cfg_path = run_hpo(config_path)
         if best_cfg_path:
             selected_config_path = best_cfg_path
-            print(f"Using HPO-optimized config: {best_cfg_path}", flush=True)
+            print(f"Using HPO-optimized config: {best_cfg_path}\n", flush=True)
         else:
             print("HPO completed but no _best.yml found; using base config.", flush=True)
     except Exception as e:
-        print(f"HPO failed: {e}. Falling back to base config.", flush=True)
+        print(f"HPO failed: {e}. Falling back to base config.\n", flush=True)
 
-    print("--- STARTING FULL TRAINING RUN ---", flush=True)
+    print("--- STARTING FULL TRAINING RUN ---\n", flush=True)
 
     # Start Training
     path_to_train_file = "/workspace/training/train.py"

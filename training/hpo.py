@@ -193,12 +193,12 @@ def objective(
                 try:
                     trial.report(eval_loss, step=eval_counter)
                 except Exception as _e:
-                    print(f"Optuna report failed at rung {eval_counter}: {_e}")
+                    print(f"Optuna report failed at rung {eval_counter}: {_e}\n")
 
                 # Check if we should prune
                 try:
                     if trial.should_prune():
-                        print(f"Pruning trial {trial.number} at rung {eval_counter} (eval_loss={eval_loss})")
+                        print(f"Pruning trial {trial.number} at rung {eval_counter} (eval_loss={eval_loss})\n")
                         try:
                             process.terminate()
                             try:
@@ -208,10 +208,10 @@ def objective(
                         finally:
                             cleanup_resources()
                         raise optuna.exceptions.TrialPruned(
-                            f"Pruned at rung {eval_counter} with eval_loss={eval_loss}"
+                            f"Pruned at rung {eval_counter} with eval_loss={eval_loss}\n"
                         )
                 except Exception as _e:
-                    print(f"Optuna prune check failed at rung {eval_counter}: {_e}")
+                    print(f"Optuna prune check failed at rung {eval_counter}: {_e}\n")
 
         return_code = process.wait()
         if return_code != 0:
@@ -227,13 +227,13 @@ def objective(
             print("Could not extract eval_loss from stdout, using fallback value")
             return float("inf") if cfg["rl"] != "grpo" else float("-inf")
         
-        print(f"Trial {trial.number} completed with eval_loss: {eval_loss}")
+        print(f"Trial {trial.number} completed with eval_loss: {eval_loss}\n")
         return eval_loss
 
     except subprocess.CalledProcessError as e:
         print("Training subprocess failed!", flush=True)
-        print(f"Exit Code: {e.returncode}", flush=True)
-        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
+        print(f"Exit Code: {e.returncode}\n", flush=True)
+        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}\n", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
 # ╰──────────────────────────────────────────────────────────────────────────╯
@@ -288,7 +288,7 @@ def run_optuna(base_cfg_path: str) -> dict:
     seconds_remaining = max(0.0, time_remaining.total_seconds() * PERCENT_TIME_FOR_HPO)
     time_when_hpo_finished = datetime.now(timezone.utc) + timedelta(seconds=seconds_remaining)
 
-    print(f"Time allocated to HPO Search: {seconds_remaining/3600:.2f}h")
+    print(f"Time allocated to HPO Search: {seconds_remaining/3600:.2f}h\n")
     
     # Run optimization with exception handling
     try:
@@ -301,7 +301,7 @@ def run_optuna(base_cfg_path: str) -> dict:
             callbacks=[lambda study, trial: cleanup_resources()]  # Cleanup after each trial
         )
     except Exception as e:
-        print(f"Study optimization failed: {e}")
+        print(f"Study optimization failed: {e}\n")
         # Try to get best value so far
         if len(study.trials) > 0:
             print("Attempting to use best trial found so far...")
@@ -310,7 +310,7 @@ def run_optuna(base_cfg_path: str) -> dict:
 
     # Final results
     if study.best_trial:
-        print(f"HPO finished – best eval_loss {study.best_value:.5f} with params {study.best_params}")
+        print(f"HPO finished – best eval_loss {study.best_value:.5f} with params {study.best_params}\n")
             
         return study.best_params
     else:
@@ -350,7 +350,7 @@ def main():
         cleanup_resources()
         time.sleep(GPU_CLEANUP_WAIT_TIME * 2)
     except Exception as e:
-        print(f"HPO pipeline failed: {e}")
+        print(f"HPO pipeline failed: {e}\n")
         raise
 
 if __name__ == "__main__":
