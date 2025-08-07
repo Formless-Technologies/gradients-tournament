@@ -159,13 +159,7 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     # update model info
     model_path = f"/cache/models/{model.replace('/', '--')}"
     config['base_model'] = model_path
-
     config['model_params_count'] = 0
-
-    # Model specific configs
-    if any(k in model.lower() for k in ("meta-llama-3.1")):
-        config['packing'] = False
-        config["use_liger_kernel"] = False
 
     # Calculate sequence length and model architecture
     model_config = AutoConfig.from_pretrained(model_path)
@@ -176,6 +170,28 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     model_max_sequence_length = model_config.max_position_embeddings
     largest_trainable_sequence_length = config['sequence_len']
     config['sequence_len'] = min(model_max_sequence_length, largest_trainable_sequence_length)
+
+
+    # Model specific configs
+    if any(k in model.lower() for k in ("meta-llama-3.1")):
+        config['packing'] = False
+        config["use_liger_kernel"] = False
+
+    liger_model_architectures = [
+        "qwen2forcausallm",
+        "llamaforcausallm",
+        "gemma2forcausallm",
+        "mixtralforcausallm",
+        "mistralforcausallm",
+        "qwen3forcausallm",
+        "phi3forcausallm",
+        "gemmaforcausallm",
+    ]
+
+    if architecture.lower() in liger_model_architectures:
+        config["use_liger_kernel"] = True
+    else:
+        config["use_liger_kernel"] = True
 
     return config
 
