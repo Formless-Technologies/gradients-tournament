@@ -20,9 +20,9 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
 LOG = logging.getLogger("hpo_optuna")
 
-MAX_TRIALS_TO_RUN = 5
-TRIAL_MAX_STEPS = 11
-TRIAL_EVAL_STEPS = 10
+MAX_TRIALS_TO_RUN = 10
+TRIAL_MAX_STEPS = 120
+TRIAL_EVAL_STEPS = 60
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 15
 GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
@@ -179,11 +179,46 @@ def objective(
             bufsize=1
         )
 
-        # Capture stdout for loss extraction
+        # Capture stdout, stream metrics, and report to Optuna for pruning
         stdout_lines = []
+        eval_counter = 0
+        max_rungs = max(2, int(TRIAL_MAX_STEPS / TRIAL_EVAL_STEPS))
         for line in process.stdout:
             print(line, end="", flush=True)
             stdout_lines.append(line)
+
+            # Look for eval_loss on this line
+            m = _EVAL_RE.search(line)
+            if m:
+                try:
+                    eval_loss = float(m.group(1))
+                except Exception:
+                    continue
+
+                eval_counter += 1
+                # Report rung index as resource step for Hyperband
+                try:
+                    trial.report(eval_loss, step=eval_counter)
+                except Exception as _e:
+                    LOG.warning(f"Optuna report failed at rung {eval_counter}: {_e}")
+
+                # Check if we should prune
+                try:
+                    if trial.should_prune():
+                        LOG.info(f"Pruning trial {trial.number} at rung {eval_counter} (eval_loss={eval_loss})")
+                        try:
+                            process.terminate()
+                            try:
+                                process.wait(timeout=10)
+                            except Exception:
+                                process.kill()
+                        finally:
+                            cleanup_resources()
+                        raise optuna.exceptions.TrialPruned(
+                            f"Pruned at rung {eval_counter} with eval_loss={eval_loss}"
+                        )
+                except Exception as _e:
+                    LOG.warning(f"Optuna prune check failed at rung {eval_counter}: {_e}")
 
         return_code = process.wait()
         if return_code != 0:
@@ -244,14 +279,15 @@ def run_optuna(base_cfg_path: str) -> dict:
         direction = "minimize"
 
     # Create study with more aggressive pruning for stability
+    max_rungs = max(2, int(TRIAL_MAX_STEPS / TRIAL_EVAL_STEPS))
     study = optuna.create_study(
         direction=direction,
         study_name=base_cfg["task_id"],
         load_if_exists=True,  # Allow resuming interrupted studies
         storage=storage,
         pruner=HyperbandPruner(
-            min_resource=2,  # Allow early pruning
-            max_resource=int(TRIAL_MAX_STEPS/TRIAL_EVAL_STEPS), 
+            min_resource=1,  # Allow earliest pruning at first rung
+            max_resource=max_rungs,
             reduction_factor=3
         )
     )
