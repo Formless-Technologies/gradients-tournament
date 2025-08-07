@@ -15,12 +15,22 @@ import torch
 import psutil
 from contextlib import contextmanager
 
-MAX_TRIALS_TO_RUN = 3
+testing = True
+
+MAX_TRIALS_TO_RUN = 10
 TRIAL_MAX_STEPS = 120
 TRIAL_EVAL_STEPS = 60
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 15
 GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
+
+if testing:
+    MAX_TRIALS_TO_RUN = 4
+    TRIAL_MAX_STEPS = 20
+    TRIAL_EVAL_STEPS = 10
+    PERCENT_TIME_FOR_HPO = 0.25
+    MAX_MINUTES_PER_TRIAL = 15
+    GPU_CLEANUP_WAIT_TIME = 10  # seconds to wait for GPU cleanup
 
 
 # ╭──────────────────────── Hyper‑parameter space ───────────────────────────╮

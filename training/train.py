@@ -57,7 +57,6 @@ def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds
     trainer_kwargs = build_trainer_args(config)
 
     #####################################
-    print("Initializing Trainer")
     # SFT
     if config['rl'] == "sft":
         trainer_args = SFTConfig(
@@ -109,12 +108,9 @@ def run_training(config_path: str) -> None:
     """Run the training loop using the provided YAML config path."""
     config = load_config(config_path)
 
-
     # Performance flags
     torch.backends.cudnn.benchmark = True
     torch.cuda.empty_cache()
-    
-    print(f"Loaded config from {config_path}")
     
     # after loading config...
     tokenizer = load_tokenizer(config['base_model'], config)
@@ -136,7 +132,6 @@ def run_training(config_path: str) -> None:
     else:
         peft_config = None
 
-    print("Starting Full Model Training...")
     trainer = build_trainer(config, model, peft_config, tokenizer, train_dataset, eval_dataset)
 
     trainer.train()

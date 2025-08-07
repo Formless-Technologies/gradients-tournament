@@ -115,7 +115,7 @@ def run_hpo(config_path: str):
     # Check for optimised config emitted by HPO script
     best_cfg_path = config_path.replace(".yml", "_best.yml")
     if os.path.exists(best_cfg_path):
-        print(f"Found optimised config: {best_cfg_path}", flush=True)
+        print(f"Found optimised config: {best_cfg_path}\n", flush=True)
         return best_cfg_path
     else:
         print("No optimised _best.yml found; will fall back to base config.", flush=True)
