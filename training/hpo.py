@@ -244,6 +244,15 @@ def objective(
         print("Training subprocess failed!", flush=True)
         print(f"Exit Code: {e.returncode}\n", flush=True)
         print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}\n", flush=True)
+        try:
+            tail_lines = stdout_lines[-10:] if 'stdout_lines' in locals() and stdout_lines else []
+            if tail_lines:
+                print("Last 10 lines of subprocess output:", flush=True)
+                print("".join(tail_lines), end="", flush=True)
+            else:
+                print("No captured subprocess output available.", flush=True)
+        except Exception as tail_err:
+            print(f"Failed to print subprocess tail: {tail_err}", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
 # ╰──────────────────────────────────────────────────────────────────────────╯

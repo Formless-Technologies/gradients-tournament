@@ -24,8 +24,8 @@ early_stopping_patience: 3
 metric_for_best_model: eval_loss
 
 max_steps: 6000
-save_steps: 100
-eval_steps: 50
+save_steps: 500
+eval_steps: 500
 warmup_steps: 100
 logging_steps: 10
 save_total_limit: 3
