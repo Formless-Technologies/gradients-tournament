@@ -188,7 +188,7 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
         "gemmaforcausallm",
     ]
 
-    if architecture.lower() in liger_model_architectures:
+    if config['model_architecture'] in liger_model_architectures:
         config["use_liger_kernel"] = True
     else:
         config["use_liger_kernel"] = False
