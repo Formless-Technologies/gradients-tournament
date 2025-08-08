@@ -139,6 +139,10 @@ def run_training(config_path: str) -> None:
 
     trainer.train()
 
+    if not config['no_save_run']:
+        trainer.save_model(config['output_dir'])
+        tokenizer.save_pretrained(config['output_dir'])
+
 
 def main():
     args = parse_args()

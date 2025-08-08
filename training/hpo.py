@@ -125,8 +125,9 @@ def objective(
     trial_id = f"trial_{trial.number}"
     out_dir = f"./hpo_runs/{trial_id}"
     cfg |= {
+        "no_save_run": True,
         "output_dir": str(out_dir),
-        "save_steps": 500,
+        "save_steps": 10000,
         "logging_steps": 10,  # More frequent logging for monitoring
         "save_total_limit": 1,  # Save disk space
         "load_best_model_at_end": False,  # Speed up for HPO

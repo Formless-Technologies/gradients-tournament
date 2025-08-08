@@ -44,6 +44,7 @@ sequence_len: 8196
 task_id:
 rl:
 model_params_count: 0
+no_save_run: false
 datasets:
 output_dir: training_output
 

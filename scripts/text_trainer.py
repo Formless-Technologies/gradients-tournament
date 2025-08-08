@@ -190,6 +190,7 @@ def run_probe(base_config_path: str, minutes: int = 5):
     probe_cfg["save_steps"] = int(1e9)
     probe_cfg["eval_steps"] = int(1e9)
     probe_cfg["save_total_limit"] = 1
+    probe_cfg["no_save_run"] = True
     try:
         probe_cfg["logging_steps"] = min(int(probe_cfg.get("logging_steps", 10)), 10)
     except Exception:
