@@ -29,7 +29,6 @@ eval_steps: 500
 warmup_ratio: 0.05
 logging_steps: 10
 save_total_limit: 3
-steps_per_minute: 0.0
 
 cleanlab: true               # turn filtering on/off
 cleanlab_keep_frac: 0.90    # keep top-92 % (empirically sweet spot)
@@ -44,6 +43,7 @@ sequence_len: 8196
 task_id:
 rl:
 model_params_count: 0
+steps_per_minute: 0.0
 main_training_run: true
 datasets:
 output_dir: training_output

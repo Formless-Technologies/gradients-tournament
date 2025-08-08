@@ -28,7 +28,6 @@ from configs.serverless_config_handler import setup_config, add_throughput_infor
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
-
 GPU_CLEANUP_WAIT_TIME = 5  # seconds
 def cleanup_resources():
     """
@@ -364,7 +363,7 @@ async def main():
     # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
     print("--- STARTING THROUGHPUT PROBE ---\n", flush=True)
 
-    steps_per_minute = run_probe(config_path, minutes=2)
+    steps_per_minute = run_probe(config_path, minutes=5)
 
     # Modify config to pass steps per minute
     if steps_per_minute != 0.0:

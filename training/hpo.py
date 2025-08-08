@@ -114,7 +114,7 @@ def objective(
     
     # Check if we have enough time left
     time_left = (time_when_hpo_finished - datetime.now(timezone.utc)).total_seconds()
-    if time_left < 60:  # Less than 1 minute left
+    if time_left < 60*10:  # Less than 10 minutes left
         print("Not enough time left for new trial")
         raise optuna.exceptions.OptunaError("Time limit reached")
     
@@ -141,9 +141,6 @@ def objective(
     tmp_cfg = Path(tempfile.mkdtemp()) / f"{trial_id}.yml"
     with tmp_cfg.open("w") as f:
         yaml.safe_dump(cfg, f)
-
-    if cfg['rl'] == "grpo":
-        cfg['trl']['max_completion_length'] = 32
 
     path_to_train_file = "/workspace/training/train.py"
     num_gpus = torch.cuda.device_count()
