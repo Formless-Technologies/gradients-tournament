@@ -23,9 +23,9 @@ MAX_MINUTES_PER_TRIAL = 15
 GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 if testing:
-    MAX_TRIALS_TO_RUN = 3
+    MAX_TRIALS_TO_RUN = 2
     PERCENT_TIME_FOR_HPO = 0.25
-    MAX_MINUTES_PER_TRIAL = 3
+    MAX_MINUTES_PER_TRIAL = 2
     GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 
@@ -125,7 +125,7 @@ def objective(
     trial_id = f"trial_{trial.number}"
     out_dir = f"./hpo_runs/{trial_id}"
     cfg |= {
-        "no_save_run": True,
+        "main_training_run": False,
         "output_dir": str(out_dir),
         "save_steps": 10000,
         "logging_steps": 10,  # More frequent logging for monitoring

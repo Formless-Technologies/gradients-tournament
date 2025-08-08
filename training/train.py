@@ -133,13 +133,18 @@ def run_training(config_path: str) -> None:
     trainer = build_trainer(config, model, peft_config, tokenizer, train_dataset, eval_dataset)
 
     print(f"Starting Training with: \n")
-    print(f"Max Steps: {config['max_steps']}\n")
-    print(f"Eval Steps: {config['eval_steps']}\n")
-    print(f"Learning Rate: {config['learning_rate']}\n")
+    print(f"Max Steps: {config['max_steps']}")
+    print(f"Eval Steps: {config['eval_steps']}")
+    print(f"Save Steps: {config['save_steps']}")
+    print(f"Main Training Run: {config['main_training_run']}")
+    print(f"Learning Rate: {config['learning_rate']}")
+    print(f"Model Architecture: {config['model_architecture']}")
+    print(f"Output Directory: {config['output_dir']}")
 
     trainer.train()
 
-    if not config['no_save_run']:
+    if config['main_training_run']:
+        print(f"Saving Final Model To: {config['output_dir']}")
         trainer.save_model(config['output_dir'])
         tokenizer.save_pretrained(config['output_dir'])
 

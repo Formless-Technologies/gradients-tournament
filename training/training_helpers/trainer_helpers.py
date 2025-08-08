@@ -31,7 +31,7 @@ def build_trainer_args(config: dict):
         approx_save_steps = approx_eval_steps
         config['max_steps'] = approx_max_steps
         config['eval_steps'] = approx_eval_steps
-        if not config['no_save_run']:
+        if config['main_training_run']:
             config['save_steps'] = approx_save_steps
 
     # Build Main Invariant Training Arguments
