@@ -322,7 +322,7 @@ def run_probe(base_config_path: str, minutes: int = 5):
 
     return steps_per_minute
 
-def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 300) -> str | None:
+def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 2000) -> str | None:
     """
     Run a short SFT pretraining pass when the primary task is DPO.
 
@@ -472,7 +472,7 @@ async def main():
     # If RL type is DPO, do SFT Pretrain
     if config['rl'] == "dpo" and DO_SFT_PRETRAIN:
         try:
-            new_model_location = run_sft_pretrain(config_path, minutes=SFT_PRETRAIN_TIME, max_steps=50)
+            new_model_location = run_sft_pretrain(config_path, minutes=SFT_PRETRAIN_TIME)
             modify_model_location(config_path, new_model_location)
         except Exception as e:
             print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
