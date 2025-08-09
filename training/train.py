@@ -141,6 +141,7 @@ def run_training(config_path: str) -> None:
     print(f"Eval Steps: {config['eval_steps']}")
     print(f"Save Steps: {config['save_steps']}")
     print(f"Main Training Run: {config['main_training_run']}")
+    print(f"Optimizer: {config['optimizer']}")
     print(f"Learning Rate: {config['learning_rate']}")
     print(f"Model Architecture: {config['model_architecture']}")
     print(f"Output Directory: {config['output_dir']}")
@@ -154,6 +155,7 @@ def run_training(config_path: str) -> None:
             if model_obj is not None and hasattr(model_obj, "merge_and_unload"):
                 merged = model_obj.merge_and_unload()
                 merged.save_pretrained(config['output_dir'])
+                tokenizer.save_pretrained(config['output_dir'])
             else:
                 trainer.save_model(config['output_dir'])
                 tokenizer.save_pretrained(config['output_dir'])

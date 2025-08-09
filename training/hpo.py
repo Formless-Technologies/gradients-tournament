@@ -33,7 +33,7 @@ if testing:
 def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
     # Invariant Params
     params = {
-        "optimizer": trial.suggest_categorical("optimizer", ["adamw_8bit"]),
+        "optimizer": trial.suggest_categorical("optimizer", ["lion_8bit"]),
     }
 
     # SFT Params
