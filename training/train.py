@@ -16,6 +16,7 @@ from trl import (
 from training_helpers.custom_callbacks import TimeLimitCallback
 from training_helpers.dataset_helpers import (
     load_sft_datasets,
+    load_sft_pretrain_datasets,
     load_dpo_datasets,
     load_grpo_datasets,
     load_tokenizer,
@@ -113,7 +114,10 @@ def run_training(config_path: str) -> None:
     # after loading config...
     tokenizer = load_tokenizer(config['base_model'], config)
 
-    if config['rl'] == "sft":
+    if config['sft_pretrain']:
+        train_dataset, eval_dataset = load_sft_pretrain_datasets(config)
+        config['rl'] = "sft"
+    elif config['rl'] == "sft":
         train_dataset, eval_dataset = load_sft_datasets(config)
     elif config['rl'] == "dpo":
         train_dataset, eval_dataset = load_dpo_datasets(config)
@@ -143,7 +147,21 @@ def run_training(config_path: str) -> None:
 
     trainer.train()
 
-    if config['main_training_run']:
+
+    if config['sft_pretrain']:
+        model_obj = getattr(trainer, "model", None)
+        try:
+            if model_obj is not None and hasattr(model_obj, "merge_and_unload"):
+                merged = model_obj.merge_and_unload()
+                merged.save_pretrained(config['output_dir'])
+            else:
+                trainer.save_model(config['output_dir'])
+                tokenizer.save_pretrained(config['output_dir'])
+        except Exception as e:
+            print(f"Merge-and-unload save failed; falling back to trainer.save_model(): {e}")
+            trainer.save_model(config['output_dir'])
+            tokenizer.save_pretrained(config['output_dir'])
+    elif config['main_training_run']:
         print(f"Saving Final Model To: {config['output_dir']}")
         trainer.save_model(config['output_dir'])
         tokenizer.save_pretrained(config['output_dir'])

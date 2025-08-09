@@ -200,6 +200,14 @@ def add_throughput_information(config_path: str, steps_per_minute: float):
 
     save_config(config, config_path)
 
+def modify_model_location(config_path: str, new_model_location: str):
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+
+    config['base_model'] = new_model_location
+
+    save_config(config, config_path)
+
 
 def setup_config(
     dataset: str,
@@ -280,3 +288,5 @@ def setup_config(
     config_path = f"/workspace/configs/{task_id}.yml"
 
     save_config(config, config_path)
+
+    return config

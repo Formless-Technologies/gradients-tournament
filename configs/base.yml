@@ -42,6 +42,7 @@ sequence_len: 8196
 ##### AUTOSET PARAMS #####
 task_id:
 rl:
+sft_pretrain: false
 model_params_count: 0
 steps_per_minute: 0.0
 main_training_run: true

@@ -20,13 +20,19 @@ import time
 import psutil
 from transformers import AutoTokenizer
 from datetime import datetime, timedelta, timezone
-
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
-from configs.serverless_config_handler import setup_config, add_throughput_information
+from configs.serverless_config_handler import setup_config, add_throughput_information, modify_model_location
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
+
+
+DO_SFT_PRETRAIN = True
+SFT_PRETRAIN_TIME = 2
+DO_THROUGHPUT_PROBE = True
+THROUGHPUT_PROBE_TIME = 2
+DO_HPO = True
 
 GPU_CLEANUP_WAIT_TIME = 5  # seconds
 def cleanup_resources():
@@ -315,7 +321,110 @@ def run_probe(base_config_path: str, minutes: int = 5):
 
     return steps_per_minute
 
+def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 300) -> str | None:
+    """
+    Run a short SFT pretraining pass when the primary task is DPO.
+
+    - Builds a derivative SFT config from the base YAML (DPO) with:
+      * minimal step/time budget
+      * separate output_dir subfolder "sft_pretrain"
+      * dataset field mapping inferred from DPO config
+
+    Returns:
+      Path to the final saved model
+    """
+    # Load the existing (DPO) config
+    with open(base_config_path, "r") as f:
+        base_cfg = yaml.safe_load(f)
+
+    if base_cfg.get("rl") not in ("dpo", "grpo"):
+        print("SFT pretrain skipped: base config is not DPO.", flush=True)
+        return None
+
+    # Build SFT config derivative
+    sft_cfg = dict(base_cfg)
+
+    # Compute short time budget via required_finish_time
+    now = datetime.now(timezone.utc)
+    sft_cfg["required_finish_time"] = (now + timedelta(minutes=max(1, int(minutes)))).isoformat()
+
+    # Training caps for a short warmup
+    sft_cfg["max_steps"] = int(max_steps)
+
+    sft_cfg["save_steps"] = int(1e9)   # avoid checkpoint overhead
+    sft_cfg["eval_steps"] = int(1e9)   # avoid eval overhead
+    sft_cfg["save_total_limit"] = 1
+    sft_cfg["main_training_run"] = False
+    sft_cfg["logging_steps"] = 10
+
+    # set a reasonable LR for SFT
+    sft_cfg["sft_pretrain"] = True
+    sft_cfg["learning_rate"] = 1e-4
+
+    # Separate output dir to avoid interfering with main run
+    base_out = "/app/checkpoints"
+    sft_cfg["output_dir"] = os.path.join(base_out, "sft_pretrain")
+
+    # Write SFT config
+    sft_cfg_path = base_config_path.replace(".yml", "_sft_pretrain.yml")
+    with open(sft_cfg_path, "w") as f:
+        yaml.safe_dump(sft_cfg, f)
+
+    # Launch a short SFT training
+    path_to_train_file = "/workspace/training/train.py"
+    num_gpus = torch.cuda.device_count()
+    if num_gpus == 1:
+        cmd = [
+            "accelerate", "launch",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(num_gpus),
+            path_to_train_file,
+            "--config", str(sft_cfg_path),
+        ]
+    else:
+        cmd = [
+            "accelerate", "launch",
+            "--multi_gpu",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(num_gpus),
+            path_to_train_file,
+            "--config", str(sft_cfg_path),
+        ]
+
+    print("--- STARTING SHORT SFT PRETRAIN ---\n", flush=True)
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+        rc = proc.wait()
+        if rc != 0:
+            print(f"SFT pretrain exited with code {rc} (continuing).", flush=True)
+    except Exception as e:
+        print(f"SFT pretrain failed: {e}", flush=True)
+    finally:
+        try:
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except Exception:
+                    proc.kill()
+        except Exception:
+            pass
+        cleanup_resources()
+        time.sleep(GPU_CLEANUP_WAIT_TIME)
+
+    print("--- SFT PRETRAIN FINISHED ---\n", flush=True)
+    return sft_cfg["output_dir"]
     
+
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
     parser = argparse.ArgumentParser(description="Text Model Training Script")
@@ -357,40 +466,52 @@ async def main():
 
     # Build Config File
     config_path = f"/workspace/configs/{args.task_id}.yml"
-    setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
+    config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
+    # If RL type is DPO, do SFT Pretrain
+    if config['rl'] == "dpo" and DO_SFT_PRETRAIN:
+        try:
+            new_model_location = run_sft_pretrain(config_path, minutes=SFT_PRETRAIN_TIME, max_steps=50)
+            modify_model_location(config_path, new_model_location)
+        except Exception as e:
+            print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
 
-    # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
-    print("--- STARTING THROUGHPUT PROBE ---\n", flush=True)
-
-    steps_per_minute = run_probe(config_path, minutes=5)
-
-    # Modify config to pass steps per minute
-    if steps_per_minute != 0.0:
-        print(f"THROUGHPUT FOUND: {steps_per_minute} spm\n", flush=True)
-        add_throughput_information(config_path, steps_per_minute)
+    
+    if DO_THROUGHPUT_PROBE:
+        # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
+        print("--- STARTING THROUGHPUT PROBE ---\n", flush=True)
+        try:
+            steps_per_minute = run_probe(config_path, minutes=THROUGHPUT_PROBE_TIME)
+            if steps_per_minute != 0.0:
+                print(f"THROUGHPUT FOUND: {steps_per_minute} spm\n", flush=True)
+                add_throughput_information(config_path, steps_per_minute)
+            else:
+                print(f"THROUGHPUT NOT FOUND DURING PROBE\n", flush=True)
+                add_throughput_information(config_path, 0.0)
+        except Exception as e:
+            print(f"Throughput Probe encountered an error and will be skipped: {e}", flush=True)
+            add_throughput_information(config_path, 0.0)
     else:
-        print(f"THROUGHPUT NOT FOUND DURING PROBE\n", flush=True)
         add_throughput_information(config_path, 0.0)
     
-    time.sleep(3)
+    time.sleep(2)
 
-    print("--- STARTING HPO PIPELINE ---\n", flush=True)
-
-    # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
+    
     selected_config_path = config_path
-    try:
-        best_cfg_path = run_hpo(config_path)
-        if best_cfg_path:
-            selected_config_path = best_cfg_path
-            print(f"Using HPO-optimized config: {best_cfg_path}\n", flush=True)
-        else:
-            print("HPO completed but no _best.yml found; using base config.", flush=True)
-    except Exception as e:
-        print(f"HPO failed: {e}. Falling back to base config.\n", flush=True)
+    if DO_HPO:
+        # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
+        print("--- STARTING HPO PIPELINE ---\n", flush=True)
+        try:
+            best_cfg_path = run_hpo(config_path)
+            if best_cfg_path:
+                selected_config_path = best_cfg_path
+                print(f"Using HPO-optimized config: {best_cfg_path}\n", flush=True)
+            else:
+                print("HPO completed but no _best.yml found; using base config.", flush=True)
+        except Exception as e:
+            print(f"HPO failed: {e}. Falling back to base config.\n", flush=True)
 
-
-    time.sleep(3)
+    time.sleep(2)
 
     print("--- STARTING FULL TRAINING RUN ---\n", flush=True)
 

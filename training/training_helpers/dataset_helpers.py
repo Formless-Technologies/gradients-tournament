@@ -188,3 +188,66 @@ def load_grpo_datasets(config: dict):
         train_ds, eval_ds = ds_train, None
 
     return train_ds, eval_ds
+
+
+def load_sft_pretrain_datasets(config: dict):
+    """
+    Build an SFT-compatible dataset from a DPO dataset.
+
+    Behavior:
+    - When rl == "dpo": maps
+        prompt   <- datasets[0]["field_prompt"]
+        completion <- datasets[0]["field_chosen"]
+
+    Returns:
+        (train_ds, eval_ds) where columns are standardized to ["prompt", "completion"].
+        If config["val_set_size"] is 0, eval_ds is None.
+    """
+    # Always load a single split to ensure a Dataset (not DatasetDict)
+    ds_train = load_dataset(
+        "json",
+        data_files=config["datasets"][0]["path"],
+        split="train",
+        storage_options={'client_kwargs': {'timeout': aiohttp.ClientTimeout(total=1800)}}
+    )
+
+    rl_type = config["rl"]
+
+    if rl_type == "dpo":
+        # Standardize to SFT-style columns
+        ds_train = ds_train.rename_columns({
+            config["datasets"][0]["field_prompt"]: "prompt",
+            config["datasets"][0]["field_chosen"]: "completion",
+        })
+
+    # Deduplicate on (prompt + completion) just like SFT
+    orig_len = len(ds_train)
+    _seen = set()
+
+    ds_train = (
+        ds_train
+        .map(
+            lambda ex: {"__hash": hashlib.md5(
+                (ex.get("prompt", "") + ex.get("completion", "")).encode()
+            ).hexdigest()},
+            num_proc=8
+        )
+        .filter(lambda ex: ex["__hash"] not in _seen and not _seen.add(ex["__hash"]), num_proc=1)
+        .remove_columns("__hash")
+    )
+
+    dup_removed = orig_len - len(ds_train)
+    print(
+        f"Removed {dup_removed:,} duplicate rows "
+        f"({dup_removed / orig_len:.2%} of original)."
+    )
+
+    # Optional random split
+    val_size = config.get("val_set_size", 0)
+    if val_size:
+        split = ds_train.train_test_split(test_size=val_size, seed=42)
+        train_ds, eval_ds = split["train"], split["test"]
+    else:
+        train_ds, eval_ds = ds_train, None
+
+    return train_ds, eval_ds
