@@ -190,6 +190,16 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
     else:
         config["use_liger_kernel"] = False
 
+    no_flash_attention_architectures = [
+        "phi3forcausallm",
+        "phiforcausallm",
+        "falconforcausallm"
+    ]
+    if config['model_architecture'] in no_flash_attention_architectures:
+        config["use_flash_attn"] = False
+    else:
+        config["use_flash_attn"] = True
+        
     return config
 
 def add_throughput_information(config_path: str, steps_per_minute: float):

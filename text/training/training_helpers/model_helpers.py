@@ -4,13 +4,15 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from accelerate import PartialState
 
 
-def load_model(model_name: str, cfg: dict) -> AutoModelForCausalLM:
-    model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16)
+def load_model(model_name: str, config: dict) -> AutoModelForCausalLM:
+
+    if config["use_flash_attn"]:
+        model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2")
+    else:
+        model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16)
     model.train()
 
     return model
-
-
 
 
 def get_lora_adapter(model: AutoModelForCausalLM, cfg: dict) -> AutoModelForCausalLM:
