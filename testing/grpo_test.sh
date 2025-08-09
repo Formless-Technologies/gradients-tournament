@@ -5,11 +5,17 @@ DATASET="https://huggingface.co/datasets/Amod/mental_health_counseling_conversat
 DATASET_TYPE='{
   "field_prompt":"Context",
   "reward_functions":[
-        {"reward_func":"def reward_func(completions, **kwargs):\n    # Count frequency of letter \"e\" in response\n    return [text.count(\"e\") / (len(text) + 1) for text in completions]",
-        "reward_weight":0.7,"name":"e_counter"},
-        {"reward_func":"def reward_func(completions, **kwargs):\n    # Reward responses that are long but not too long\n    return [min(len(text)/100, 1.0) for text in completions]",
-        "reward_weight":0.3,"name":"length_scorer"}
-    ]
+    {
+      "reward_func":"def reward_func(completions, **kwargs):\n    # Count frequency of letter \"e\" in response\n    return [text.count(\"e\") / (len(text) + 1) for text in completions]",
+      "reward_weight":0.7,
+      "name":"e_counter"
+    },
+    {
+      "reward_func":"def reward_func(completions, **kwargs):\n    # Reward responses that are long but not too long\n    return [min(len(text)/100, 1.0) for text in completions]",
+      "reward_weight":0.3,
+      "name":"length_scorer"
+    }
+  ]
 }'
 FILE_FORMAT="s3"
 HOURS_TO_COMPLETE=8

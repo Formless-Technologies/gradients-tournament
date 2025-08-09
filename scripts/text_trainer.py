@@ -34,11 +34,14 @@ SFT_PRETRAIN_TIME = 30
 DO_THROUGHPUT_PROBE = True
 THROUGHPUT_PROBE_TIME = 5
 DO_HPO = True
-GPU_CLEANUP_WAIT_TIME = 5  # seconds
+GPU_CLEANUP_WAIT_TIME = 5
 
 if TESTING:
-    SFT_PRETRAIN_TIME = 2
-    THROUGHPUT_PROBE_TIME = 2
+    DO_SFT_PRETRAIN = False
+    SFT_PRETRAIN_TIME = 1
+    DO_THROUGHPUT_PROBE = True
+    THROUGHPUT_PROBE_TIME = 1
+    DO_HPO = False
 
 def cleanup_resources():
     """
@@ -479,6 +482,7 @@ async def main():
             modify_model_location(config_path, new_model_location)
         except Exception as e:
             print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
+    time.sleep(2)
 
     # THROUGHPUT PROBE =======================================================
     if DO_THROUGHPUT_PROBE:

@@ -25,7 +25,7 @@ GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 if TESTING:
     MAX_TRIALS_TO_RUN = 2
     PERCENT_TIME_FOR_HPO = 0.25
-    MAX_MINUTES_PER_TRIAL = 2
+    MAX_MINUTES_PER_TRIAL = 1
     GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 
@@ -193,6 +193,7 @@ def objective(
                 eval_counter += 1
                 # Report rung index as resource step for Hyperband
                 try:
+                    print(f"Reporting Eval Loss to Optuna: {eval_loss}\n")
                     trial.report(eval_loss, step=eval_counter)
                 except Exception as _e:
                     print(f"Optuna report failed at rung {eval_counter}: {_e}\n")
@@ -354,11 +355,7 @@ def main():
     try:
         best_params = run_optuna(args.config)
         optimised_cfg = write_best_cfg(args.config, best_params)
-        
-        # Clean pause before full training
-        print("Pausing before full training run...")
         cleanup_resources()
-        time.sleep(GPU_CLEANUP_WAIT_TIME * 2)
     except Exception as e:
         print(f"HPO pipeline failed: {e}\n")
         raise
