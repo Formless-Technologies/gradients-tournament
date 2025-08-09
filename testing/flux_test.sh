@@ -17,7 +17,7 @@ MODEL_TYPE="flux"
 # Optional: Repository name for the trained model
 EXPECTED_REPO_NAME="my-flux-finetuned"
 
-CHECKPOINTS_DIR="$(pwd)/secure_data"
+CHECKPOINTS_DIR="$(pwd)/testing/secure_data"
 mkdir -p "$CHECKPOINTS_DIR"
 chmod 777 "$CHECKPOINTS_DIR"
 

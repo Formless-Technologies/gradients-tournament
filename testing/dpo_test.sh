@@ -17,7 +17,7 @@ HOURS_TO_COMPLETE=8
 EXPECTED_REPO_NAME="my-finetuned-model"
 
 # Create secure data directory
-DATA_DIR="$(pwd)/secure_data"
+DATA_DIR="$(pwd)/testing/secure_data"
 mkdir -p "$DATA_DIR"
 chmod 777 "$DATA_DIR"
 

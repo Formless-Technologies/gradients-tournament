@@ -79,8 +79,8 @@ ENV ACCELERATE_DISABLE_RICH=1
 WORKDIR /workspace
 RUN mkdir -p /workspace/configs /workspace/training /workspace/scripts /app/checkpoints
 
-COPY configs/ /workspace/configs
-COPY training/ /workspace/training
+COPY text/configs/ /workspace/configs
+COPY text/training/ /workspace/training
 COPY scripts /workspace/scripts
 
 RUN chmod +x /workspace/scripts/run_text_trainer.sh

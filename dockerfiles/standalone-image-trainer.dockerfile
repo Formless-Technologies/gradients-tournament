@@ -16,7 +16,7 @@ RUN mkdir -p /dataset/configs \
     /dataset/images \
     /workspace/scripts
 
-COPY configs /workspace/scripts/configs
+COPY image/configs /workspace/scripts/configs
 COPY scripts /workspace/scripts
 
 RUN chmod +x /workspace/scripts/run_image_trainer.sh
