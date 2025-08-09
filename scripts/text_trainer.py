@@ -29,9 +29,9 @@ from configs.serverless_config_handler import InstructTextDatasetType, DpoDatase
 
 
 DO_SFT_PRETRAIN = True
-SFT_PRETRAIN_TIME = 2
+SFT_PRETRAIN_TIME = 15
 DO_THROUGHPUT_PROBE = True
-THROUGHPUT_PROBE_TIME = 2
+THROUGHPUT_PROBE_TIME = 5
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5  # seconds
 
