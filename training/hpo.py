@@ -15,14 +15,14 @@ import torch
 import psutil
 from contextlib import contextmanager
 
-testing = False
+TESTING = False
 
 MAX_TRIALS_TO_RUN = 10
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 15
 GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
-if testing:
+if TESTING:
     MAX_TRIALS_TO_RUN = 2
     PERCENT_TIME_FOR_HPO = 0.25
     MAX_MINUTES_PER_TRIAL = 2

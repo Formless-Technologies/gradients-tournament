@@ -27,6 +27,7 @@ from configs.serverless_config_handler import setup_config, add_throughput_infor
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
+TESTING = False
 
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 30
@@ -35,6 +36,9 @@ THROUGHPUT_PROBE_TIME = 5
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5  # seconds
 
+if TESTING:
+    SFT_PRETRAIN_TIME = 2
+    THROUGHPUT_PROBE_TIME = 2
 
 def cleanup_resources():
     """
@@ -61,7 +65,6 @@ def cleanup_resources():
     except Exception as e:
         print(f"Resource cleanup error: {e}", flush=True)
 
-
 def patch_wandb_symlinks(base_dir: str):
     """Handle WandB symlinks by converting to real files."""
     for root, _, files in os.walk(base_dir):
@@ -77,7 +80,6 @@ def patch_wandb_symlinks(base_dir: str):
                         pathlib.Path(full_path).touch()
                 except Exception as e:
                     print(f"Symlink patch failed: {e}")
-
 
 def patch_model_metadata(output_dir: str, base_model_id: str):
     try:
@@ -120,7 +122,6 @@ def patch_model_metadata(output_dir: str, base_model_id: str):
         print(f"Error updating metadata: {e}", flush=True)
         pass
 
-
 def run_hpo(config_path: str):
     """
     Launch the HPO pipeline. If it produces a _best.yml config, return that path.
@@ -158,7 +159,6 @@ def run_hpo(config_path: str):
     else:
         print("No optimised _best.yml found; will fall back to base config.", flush=True)
         return None
-
 
 def run_probe(base_config_path: str, minutes: int = 5):
     """
@@ -469,7 +469,10 @@ async def main():
     config_path = f"/workspace/configs/{args.task_id}.yml"
     config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
 
-    # If RL type is DPO, do SFT Pretrain
+
+
+
+    # SFT PRETRAINING STEP FOR DPO ==========================================
     if config['rl'] == "dpo" and DO_SFT_PRETRAIN:
         try:
             new_model_location = run_sft_pretrain(config_path, minutes=SFT_PRETRAIN_TIME)
@@ -477,7 +480,7 @@ async def main():
         except Exception as e:
             print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
 
-    
+    # THROUGHPUT PROBE =======================================================
     if DO_THROUGHPUT_PROBE:
         # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
         print("--- STARTING THROUGHPUT PROBE ---\n", flush=True)
@@ -497,7 +500,7 @@ async def main():
     
     time.sleep(2)
 
-    
+    # HPO STEP ================================================================
     selected_config_path = config_path
     if DO_HPO:
         # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
@@ -514,6 +517,8 @@ async def main():
 
     time.sleep(2)
 
+
+    # FULL TRAINING RUN =========================================================
     print("--- STARTING FULL TRAINING RUN ---\n", flush=True)
 
     # Start Training
