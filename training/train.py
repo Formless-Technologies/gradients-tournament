@@ -153,10 +153,12 @@ def run_training(config_path: str) -> None:
         model_obj = getattr(trainer, "model", None)
         try:
             if model_obj is not None and hasattr(model_obj, "merge_and_unload"):
+                print(f"Saving Final Model To: {config['output_dir']}")
                 merged = model_obj.merge_and_unload()
                 merged.save_pretrained(config['output_dir'])
                 tokenizer.save_pretrained(config['output_dir'])
             else:
+                print(f"Saving Final Model To: {config['output_dir']}")
                 trainer.save_model(config['output_dir'])
                 tokenizer.save_pretrained(config['output_dir'])
         except Exception as e:

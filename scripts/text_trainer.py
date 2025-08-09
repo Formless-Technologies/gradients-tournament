@@ -322,7 +322,7 @@ def run_probe(base_config_path: str, minutes: int = 5):
 
     return steps_per_minute
 
-def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 2000) -> str | None:
+def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 1000) -> str | None:
     """
     Run a short SFT pretraining pass when the primary task is DPO.
 
