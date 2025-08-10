@@ -64,4 +64,5 @@ docker run --rm --gpus all \
   --task-type "GrpoTask" \
   --file-format "$FILE_FORMAT" \
   --expected-repo-name "$EXPECTED_REPO_NAME" \
-  --hours-to-complete "4"
+  --hours-to-complete "4" \
+  --testing

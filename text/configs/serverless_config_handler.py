@@ -232,9 +232,11 @@ def setup_config(
     if testing:
         with open("/workspace/configs/base_testing.yml", "r") as file:
             config = yaml.safe_load(file)
+        config['testing'] = True
     else:
         with open("/workspace/configs/base.yml", "r") as file:
             config = yaml.safe_load(file)
+        config['testing'] = False
     
     # Useful config
     config['task_id'] = task_id

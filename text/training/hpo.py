@@ -15,18 +15,11 @@ import torch
 import psutil
 from contextlib import contextmanager
 
-TESTING = False
 
 MAX_TRIALS_TO_RUN = 10
 PERCENT_TIME_FOR_HPO = 0.25
 MAX_MINUTES_PER_TRIAL = 15
 GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
-
-if TESTING:
-    MAX_TRIALS_TO_RUN = 2
-    PERCENT_TIME_FOR_HPO = 0.25
-    MAX_MINUTES_PER_TRIAL = 1
-    GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 
 # ╭──────────────────────── Hyper‑parameter space ───────────────────────────╮
@@ -351,6 +344,12 @@ def main():
     
     with open(args.config) as f:
         base_cfg = yaml.safe_load(f)
+
+    if base_cfg['testing']:
+        global MAX_TRIALS_TO_RUN
+        global MAX_MINUTES_PER_TRIAL
+        MAX_TRIALS_TO_RUN = 2
+        MAX_MINUTES_PER_TRIAL = 1
     
     try:
         best_params = run_optuna(args.config)

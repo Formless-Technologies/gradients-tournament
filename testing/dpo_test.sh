@@ -57,4 +57,5 @@ docker run --rm --gpus all \
   --task-type "DpoTask" \
   --file-format "$FILE_FORMAT" \
   --expected-repo-name "$EXPECTED_REPO_NAME" \
-  --hours-to-complete "4"
+  --hours-to-complete "4" \
+  --testing

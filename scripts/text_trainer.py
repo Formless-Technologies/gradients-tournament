@@ -27,21 +27,13 @@ from configs.serverless_config_handler import setup_config, add_throughput_infor
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
-TESTING = False
-
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 30
 DO_THROUGHPUT_PROBE = True
 THROUGHPUT_PROBE_TIME = 5
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5
-
-if TESTING:
-    DO_SFT_PRETRAIN = True
-    SFT_PRETRAIN_TIME = 1
-    DO_THROUGHPUT_PROBE = True
-    THROUGHPUT_PROBE_TIME = 1
-    DO_HPO = True
+    
 
 def cleanup_resources():
     """
@@ -435,8 +427,17 @@ async def main():
     parser.add_argument("--file-format", required=True, choices=["csv", "json", "hf", "s3"], help="File format")
     parser.add_argument("--expected-repo-name", help="Expected repository name")
     parser.add_argument("--hours-to-complete", help="Number of hours to complete the training")
+    parser.add_argument("--testing", help="Whether testing is enabled or not. For local development", action="store_true")
     args = parser.parse_args()
-
+    
+    if args.testing:
+        print("===== TESTING IS ENABLED ON THIS RUN! =====", flush=True)
+        DO_SFT_PRETRAIN = True
+        SFT_PRETRAIN_TIME = 1
+        DO_THROUGHPUT_PROBE = True
+        THROUGHPUT_PROBE_TIME = 1
+        DO_HPO = True
+    
     # Setup Datasets
     try:
         dataset_type_dict = json.loads(args.dataset_type)
@@ -465,7 +466,7 @@ async def main():
 
     # Build Config File
     config_path = f"/workspace/configs/{args.task_id}.yml"
-    config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time, testing=TESTING)
+    config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time, testing=args.testing)
 
 
 
