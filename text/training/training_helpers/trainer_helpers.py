@@ -27,8 +27,8 @@ def build_trainer_args(config: dict):
         seconds_for_target_evals = math.ceil(TARGET_NUM_EVALS * seconds_per_eval)
         time_remaining = datetime.fromisoformat(config['required_finish_time']) - datetime.now(timezone.utc) - timedelta(seconds=seconds_for_target_evals)
         minutes_remaining = max(0.0, time_remaining.total_seconds()) / 60
-        approx_max_steps = math.floor(steps_per_minute * minutes_remaining)
-        approx_eval_steps = max(6, approx_max_steps // TARGET_NUM_EVALS)
+        approx_max_steps = max(10, math.floor(steps_per_minute * minutes_remaining))
+        approx_eval_steps = max(5, approx_max_steps // TARGET_NUM_EVALS)
         approx_save_steps = approx_eval_steps
         config['max_steps'] = approx_max_steps
         config['eval_steps'] = approx_eval_steps

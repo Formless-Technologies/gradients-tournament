@@ -29,11 +29,11 @@ from configs.serverless_config_handler import InstructTextDatasetType, DpoDatase
 
 DO_FULL_TRAINING = True
 DO_SFT_PRETRAIN = True
-SFT_PRETRAIN_TIME = 30
+SFT_PRETRAIN_TIME = 40
 DO_THROUGHPUT_PROBE = True
-THROUGHPUT_PROBE_TIME = 5
+THROUGHPUT_PROBE_TIME = 3
 DO_EVAL_PROBE = True
-EVAL_PROBE_TIME = 5
+EVAL_PROBE_TIME = 10
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5
 
@@ -141,11 +141,6 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 
     # Compute short time budget via required_finish_time
     sft_cfg["required_finish_time"] = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
 
-    # Training caps for a short warmup
-    sft_cfg["max_steps"] = int(max_steps)
-
-    sft_cfg["save_steps"] = int(1e9)   # avoid checkpoint overhead
-    sft_cfg["eval_steps"] = int(1e9)   # avoid eval overhead
     sft_cfg["save_total_limit"] = 1
     sft_cfg["main_training_run"] = False
     sft_cfg["logging_steps"] = 10
@@ -162,6 +157,43 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 
     sft_cfg_path = base_config_path.replace(".yml", "_sft_pretrain.yml")
     with open(sft_cfg_path, "w") as f:
         yaml.safe_dump(sft_cfg, f)
+
+    if DO_THROUGHPUT_PROBE:
+        # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
+        print("--- STARTING SFT PRETRAIN THROUGHPUT PROBE ---\n", flush=True)
+        try:
+            steps_per_minute = run_throughput_probe(sft_cfg_path, minutes=THROUGHPUT_PROBE_TIME)
+            if steps_per_minute != 0.0:
+                print(f"THROUGHPUT FOUND: {steps_per_minute} spm\n", flush=True)
+                add_throughput_information(sft_cfg_path, steps_per_minute)
+            else:
+                print(f"THROUGHPUT NOT FOUND DURING PROBE\n", flush=True)
+                add_throughput_information(sft_cfg_path, 0.0)
+        except Exception as e:
+            print(f"Throughput Probe encountered an error and will be skipped: {e}", flush=True)
+            add_throughput_information(sft_cfg_path, 0.0)
+    else:
+        add_throughput_information(sft_cfg_path, 0.0)
+    time.sleep(1)
+
+    # EVAL PROBE =======================================================
+    if DO_EVAL_PROBE:
+        # Run eval probe to determine our eval time
+        print("--- STARTING SFT PRETRAIN EVAL PROBE ---\n", flush=True)
+        try:
+            eval_time = run_eval_probe(sft_cfg_path, minutes=EVAL_PROBE_TIME)
+            if eval_time != 0.0:
+                print(f"EVAL TIME FOUND: {eval_time}s/eval\n", flush=True)
+                add_eval_time_information(sft_cfg_path, eval_time)
+            else:
+                print(f"EVAL TIME NOT FOUND DURING PROBE\n", flush=True)
+                add_eval_time_information(sft_cfg_path, 0.0)
+        except Exception as e:
+            print(f"Eval Probe encountered an error and will be skipped: {e}", flush=True)
+            add_eval_time_information(sft_cfg_path, 0.0)
+    else:
+        add_eval_time_information(sft_cfg_path, 0.0)
+    time.sleep(1)
 
     # Launch a short SFT training
     path_to_train_file = "/workspace/training/train.py"
@@ -254,6 +286,7 @@ def run_throughput_probe(base_config_path: str, minutes: int = 5):
     probe_cfg["eval_steps"] = int(1e9)
     probe_cfg["save_total_limit"] = 1
     probe_cfg["main_training_run"] = False
+    probe_cfg["throughput_probe_run"] = True
     try:
         probe_cfg["logging_steps"] = min(int(probe_cfg.get("logging_steps", 10)), 10)
     except Exception:
@@ -533,8 +566,16 @@ async def main():
     
     if args.testing:
         print("===== TESTING IS ENABLED ON THIS RUN! =====", flush=True)
-        DO_SFT_PRETRAIN = False
-        SFT_PRETRAIN_TIME = 1
+        global DO_SFT_PRETRAIN
+        global SFT_PRETRAIN_TIME
+        global DO_THROUGHPUT_PROBE
+        global THROUGHPUT_PROBE_TIME
+        global DO_EVAL_PROBE
+        global EVAL_PROBE_TIME
+        global DO_HPO
+        global DO_FULL_TRAINING
+        DO_SFT_PRETRAIN = True
+        SFT_PRETRAIN_TIME = 2
         DO_THROUGHPUT_PROBE = True
         THROUGHPUT_PROBE_TIME = 1
         DO_EVAL_PROBE = True

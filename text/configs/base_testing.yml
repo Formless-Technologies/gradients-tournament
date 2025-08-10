@@ -44,6 +44,7 @@ task_id:
 rl:
 sft_pretrain: false
 eval_probe_run: false
+throughput_probe_run: false
 model_params_count: 0
 steps_per_minute: 0.0
 seconds_per_eval: 0.0

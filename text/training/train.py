@@ -155,7 +155,7 @@ def run_training(config_path: str) -> None:
         trainer.train()
 
 
-    if config['sft_pretrain']:
+    if config['sft_pretrain'] and not (config['eval_probe_run'] or config['throughput_probe_run']):
         model_obj = getattr(trainer, "model", None)
         try:
             if model_obj is not None and hasattr(model_obj, "merge_and_unload"):
