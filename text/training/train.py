@@ -137,6 +137,7 @@ def run_training(config_path: str) -> None:
     trainer = build_trainer(config, model, peft_config, tokenizer, train_dataset, eval_dataset)
 
     print(f"Starting Training with: \n")
+    print(f"Training Type: {config['rl']}")
     print(f"Max Steps: {config['max_steps']}")
     print(f"Eval Steps: {config['eval_steps']}")
     print(f"Save Steps: {config['save_steps']}")
@@ -147,7 +148,11 @@ def run_training(config_path: str) -> None:
     print(f"Flash Attention Enabled: {config['use_flash_attn']}")
     print(f"Output Directory: {config['output_dir']}")
 
-    trainer.train()
+    if config["eval_probe_run"]:
+        metrics = trainer.evaluate()
+        print(metrics)
+    else:
+        trainer.train()
 
 
     if config['sft_pretrain']:

@@ -211,6 +211,15 @@ def add_throughput_information(config_path: str, steps_per_minute: float):
 
     save_config(config, config_path)
 
+
+def add_eval_time_information(config_path: str, seconds_per_eval: float):
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+
+    config['seconds_per_eval'] = seconds_per_eval
+
+    save_config(config, config_path)
+
 def modify_model_location(config_path: str, new_model_location: str):
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)

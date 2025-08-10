@@ -23,17 +23,19 @@ from datetime import datetime, timedelta, timezone
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
-from configs.serverless_config_handler import setup_config, add_throughput_information, modify_model_location
+from configs.serverless_config_handler import setup_config, add_throughput_information, add_eval_time_information, modify_model_location
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
+DO_FULL_TRAINING = True
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 30
 DO_THROUGHPUT_PROBE = True
 THROUGHPUT_PROBE_TIME = 5
+DO_EVAL_PROBE = True
+EVAL_PROBE_TIME = 5
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5
-    
 
 def cleanup_resources():
     """
@@ -117,45 +119,105 @@ def patch_model_metadata(output_dir: str, base_model_id: str):
         print(f"Error updating metadata: {e}", flush=True)
         pass
 
-def run_hpo(config_path: str):
+def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 1000) -> str | None:
     """
-    Launch the HPO pipeline. If it produces a _best.yml config, return that path.
-    If no best config is produced, return None. Raises on subprocess failure.
+    Run a short SFT pretraining pass when the primary task is DPO.
+
+    - Builds a derivative SFT config from the base YAML (DPO) with:
+      * minimal step/time budget
+      * separate output_dir subfolder "sft_pretrain"
+      * dataset field mapping inferred from DPO config
+
+    Returns:
+      Path to the final saved model
     """
-    cmd = [
-        "python",
-        "/workspace/training/hpo.py",
-        "--config", config_path
-    ]
+    # Load the existing (DPO) config
+    with open(base_config_path, "r") as f:
+        base_cfg = yaml.safe_load(f)
 
-    # Run the command
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1
-    )
+    # Build SFT config derivative
+    sft_cfg = dict(base_cfg)
 
-    for line in process.stdout:
-        print(line, end="", flush=True)
+    # Compute short time budget via required_finish_time
+    sft_cfg["required_finish_time"] = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
 
-    return_code = process.wait()
-    if return_code != 0:
-        raise subprocess.CalledProcessError(return_code, cmd)
+    # Training caps for a short warmup
+    sft_cfg["max_steps"] = int(max_steps)
 
-    print("HPO subprocess completed successfully.", flush=True)
+    sft_cfg["save_steps"] = int(1e9)   # avoid checkpoint overhead
+    sft_cfg["eval_steps"] = int(1e9)   # avoid eval overhead
+    sft_cfg["save_total_limit"] = 1
+    sft_cfg["main_training_run"] = False
+    sft_cfg["logging_steps"] = 10
 
-    # Check for optimised config emitted by HPO script
-    best_cfg_path = config_path.replace(".yml", "_best.yml")
-    if os.path.exists(best_cfg_path):
-        print(f"Found optimised config: {best_cfg_path}\n", flush=True)
-        return best_cfg_path
+    # set a reasonable LR for SFT
+    sft_cfg["sft_pretrain"] = True
+    sft_cfg["learning_rate"] = 6e-4
+
+    # Separate output dir to avoid interfering with main run
+    base_out = "/app/checkpoints"
+    sft_cfg["output_dir"] = os.path.join(base_out, "sft_pretrain")
+
+    # Write SFT config
+    sft_cfg_path = base_config_path.replace(".yml", "_sft_pretrain.yml")
+    with open(sft_cfg_path, "w") as f:
+        yaml.safe_dump(sft_cfg, f)
+
+    # Launch a short SFT training
+    path_to_train_file = "/workspace/training/train.py"
+    num_gpus = torch.cuda.device_count()
+    if num_gpus == 1:
+        cmd = [
+            "accelerate", "launch",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(num_gpus),
+            path_to_train_file,
+            "--config", str(sft_cfg_path),
+        ]
     else:
-        print("No optimised _best.yml found; will fall back to base config.", flush=True)
-        return None
+        cmd = [
+            "accelerate", "launch",
+            "--multi_gpu",
+            "--mixed_precision", "bf16",
+            "--num_processes", str(num_gpus),
+            path_to_train_file,
+            "--config", str(sft_cfg_path),
+        ]
 
-def run_probe(base_config_path: str, minutes: int = 5):
+    print("--- STARTING SHORT SFT PRETRAIN ---\n", flush=True)
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+        for line in proc.stdout:
+            print(line, end="", flush=True)
+        rc = proc.wait()
+        if rc != 0:
+            print(f"SFT pretrain exited with code {rc} (continuing).", flush=True)
+    except Exception as e:
+        print(f"SFT pretrain failed: {e}", flush=True)
+    finally:
+        try:
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except Exception:
+                    proc.kill()
+        except Exception:
+            pass
+        cleanup_resources()
+        time.sleep(GPU_CLEANUP_WAIT_TIME)
+
+    print("--- SFT PRETRAIN FINISHED ---\n", flush=True)
+    return sft_cfg["output_dir"]
+    
+def run_throughput_probe(base_config_path: str, minutes: int = 5):
     """
     Run a short time-limited training to estimate steps-per-minute using the base YAML config.
     The throughput is computed over the LAST 80% of the probe duration to reduce warmup bias.
@@ -317,104 +379,143 @@ def run_probe(base_config_path: str, minutes: int = 5):
 
     return steps_per_minute
 
-def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 1000) -> str | None:
+def run_eval_probe(base_config_path: str, minutes: int = 5):
     """
-    Run a short SFT pretraining pass when the primary task is DPO.
+    Run a short time-limited evaluation probe using the base YAML config and return eval_runtime (seconds).
 
-    - Builds a derivative SFT config from the base YAML (DPO) with:
-      * minimal step/time budget
-      * separate output_dir subfolder "sft_pretrain"
-      * dataset field mapping inferred from DPO config
-
-    Returns:
-      Path to the final saved model
+    The subprocess prints a final metrics line like:
+      {'eval_loss': 2.6305, 'eval_model_preparation_time': 0.0042, 'eval_runtime': 2.3998, ...}
+    This function scans stdout to extract and return eval_runtime as a float.
     """
-    # Load the existing (DPO) config
+    # Load base config and build a probe variant
     with open(base_config_path, "r") as f:
-        base_cfg = yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
 
-    # Build SFT config derivative
-    sft_cfg = dict(base_cfg)
+    probe_cfg = dict(cfg)
 
-    # Compute short time budget via required_finish_time
-    sft_cfg["required_finish_time"] = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
+    # Make time the limiter
+    now = datetime.now(timezone.utc)
+    probe_cfg["required_finish_time"] = (now + timedelta(minutes=minutes)).isoformat()
 
-    # Training caps for a short warmup
-    sft_cfg["max_steps"] = int(max_steps)
+    # Isolate output directory to avoid interfering with real checkpoints
+    out_dir = probe_cfg.get("output_dir", f"/app/checkpoints/{uuid.uuid4().hex}")
+    probe_cfg["output_dir"] = os.path.join(out_dir, "probe")
 
-    sft_cfg["save_steps"] = int(1e9)   # avoid checkpoint overhead
-    sft_cfg["eval_steps"] = int(1e9)   # avoid eval overhead
-    sft_cfg["save_total_limit"] = 1
-    sft_cfg["main_training_run"] = False
-    sft_cfg["logging_steps"] = 10
+    # Avoid checkpointing overhead during probe; increase step cap; disable periodic eval; increase logging frequency
+    probe_cfg["max_steps"] = int(1e9)
+    probe_cfg["save_steps"] = int(1e9)
+    probe_cfg["eval_steps"] = int(1e9)
+    probe_cfg["save_total_limit"] = 1
+    probe_cfg["main_training_run"] = False
+    probe_cfg["eval_probe_run"] = True
+    probe_cfg["logging_steps"] = 10
 
-    # set a reasonable LR for SFT
-    sft_cfg["sft_pretrain"] = True
-    sft_cfg["learning_rate"] = 6e-4
+    # Write the probe config alongside the base config
+    probe_cfg_path = base_config_path.replace(".yml", "_eval_probe.yml")
+    with open(probe_cfg_path, "w") as f:
+        yaml.safe_dump(probe_cfg, f)
 
-    # Separate output dir to avoid interfering with main run
-    base_out = "/app/checkpoints"
-    sft_cfg["output_dir"] = os.path.join(base_out, "sft_pretrain")
-
-    # Write SFT config
-    sft_cfg_path = base_config_path.replace(".yml", "_sft_pretrain.yml")
-    with open(sft_cfg_path, "w") as f:
-        yaml.safe_dump(sft_cfg, f)
-
-    # Launch a short SFT training
+    # Build the accelerate command (mirror scripts/text_trainer launching approach)
     path_to_train_file = "/workspace/training/train.py"
     num_gpus = torch.cuda.device_count()
     if num_gpus == 1:
-        cmd = [
+        training_command = [
             "accelerate", "launch",
             "--mixed_precision", "bf16",
             "--num_processes", str(num_gpus),
             path_to_train_file,
-            "--config", str(sft_cfg_path),
+            "--config", str(probe_cfg_path),
         ]
     else:
-        cmd = [
+        training_command = [
             "accelerate", "launch",
             "--multi_gpu",
             "--mixed_precision", "bf16",
             "--num_processes", str(num_gpus),
             path_to_train_file,
-            "--config", str(sft_cfg_path),
+            "--config", str(probe_cfg_path),
         ]
 
-    print("--- STARTING SHORT SFT PRETRAIN ---\n", flush=True)
-    proc = None
+    process = subprocess.Popen(
+        training_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
+
+    eval_runtime = 0.0
+    return_code = 0
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-        for line in proc.stdout:
+        assert process.stdout is not None
+        for line in process.stdout:
             print(line, end="", flush=True)
-        rc = proc.wait()
-        if rc != 0:
-            print(f"SFT pretrain exited with code {rc} (continuing).", flush=True)
-    except Exception as e:
-        print(f"SFT pretrain failed: {e}", flush=True)
+            # Attempt to parse eval_runtime from any metrics line printed by HF Trainer
+            if "eval_runtime" in line:
+                m = re.search(r"['\"]eval_runtime['\"]\s*:\s*([0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)", line)
+                if m:
+                    try:
+                        eval_runtime = float(m.group(1))
+                    except Exception:
+                        pass
+        return_code = process.wait()
     finally:
+        # Ensure process is terminated and resources are cleaned up (like HPO)
         try:
-            if proc and proc.poll() is None:
-                proc.terminate()
+            if process and process.poll() is None:
+                process.terminate()
                 try:
-                    proc.wait(timeout=10)
+                    process.wait(timeout=10)
                 except Exception:
-                    proc.kill()
+                    process.kill()
         except Exception:
             pass
+
         cleanup_resources()
         time.sleep(GPU_CLEANUP_WAIT_TIME)
 
-    print("--- SFT PRETRAIN FINISHED ---\n", flush=True)
-    return sft_cfg["output_dir"]
-    
+    if return_code != 0:
+        print(f"Probe subprocess exited with code {return_code} (continuing with collected metrics).", flush=True)
+
+    return eval_runtime
+
+def run_hpo(config_path: str):
+    """
+    Launch the HPO pipeline. If it produces a _best.yml config, return that path.
+    If no best config is produced, return None. Raises on subprocess failure.
+    """
+    cmd = [
+        "python",
+        "/workspace/training/hpo.py",
+        "--config", config_path
+    ]
+
+    # Run the command
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
+
+    for line in process.stdout:
+        print(line, end="", flush=True)
+
+    return_code = process.wait()
+    if return_code != 0:
+        raise subprocess.CalledProcessError(return_code, cmd)
+
+    print("HPO subprocess completed successfully.", flush=True)
+
+    # Check for optimised config emitted by HPO script
+    best_cfg_path = config_path.replace(".yml", "_best.yml")
+    if os.path.exists(best_cfg_path):
+        print(f"Found optimised config: {best_cfg_path}\n", flush=True)
+        return best_cfg_path
+    else:
+        print("No optimised _best.yml found; will fall back to base config.", flush=True)
+        return None
 
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
@@ -432,11 +533,14 @@ async def main():
     
     if args.testing:
         print("===== TESTING IS ENABLED ON THIS RUN! =====", flush=True)
-        DO_SFT_PRETRAIN = True
+        DO_SFT_PRETRAIN = False
         SFT_PRETRAIN_TIME = 1
         DO_THROUGHPUT_PROBE = True
         THROUGHPUT_PROBE_TIME = 1
+        DO_EVAL_PROBE = True
+        EVAL_PROBE_TIME = 1
         DO_HPO = True
+        DO_FULL_TRAINING = False
     
     # Setup Datasets
     try:
@@ -477,14 +581,14 @@ async def main():
             modify_model_location(config_path, new_model_location)
         except Exception as e:
             print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
-    time.sleep(2)
+    time.sleep(1)
 
     # THROUGHPUT PROBE =======================================================
     if DO_THROUGHPUT_PROBE:
         # Run throughput probe to determine our steps per minute and adjust max_steps and warmup ratio
         print("--- STARTING THROUGHPUT PROBE ---\n", flush=True)
         try:
-            steps_per_minute = run_probe(config_path, minutes=THROUGHPUT_PROBE_TIME)
+            steps_per_minute = run_throughput_probe(config_path, minutes=THROUGHPUT_PROBE_TIME)
             if steps_per_minute != 0.0:
                 print(f"THROUGHPUT FOUND: {steps_per_minute} spm\n", flush=True)
                 add_throughput_information(config_path, steps_per_minute)
@@ -496,8 +600,26 @@ async def main():
             add_throughput_information(config_path, 0.0)
     else:
         add_throughput_information(config_path, 0.0)
-    
-    time.sleep(2)
+    time.sleep(1)
+
+    # EVAL PROBE =======================================================
+    if DO_EVAL_PROBE:
+        # Run eval probe to determine our eval time
+        print("--- STARTING EVAL PROBE ---\n", flush=True)
+        try:
+            eval_time = run_eval_probe(config_path, minutes=EVAL_PROBE_TIME)
+            if eval_time != 0.0:
+                print(f"EVAL TIME FOUND: {eval_time}s/eval\n", flush=True)
+                add_eval_time_information(config_path, eval_time)
+            else:
+                print(f"EVAL TIME NOT FOUND DURING PROBE\n", flush=True)
+                add_eval_time_information(config_path, 0.0)
+        except Exception as e:
+            print(f"Eval Probe encountered an error and will be skipped: {e}", flush=True)
+            add_eval_time_information(config_path, 0.0)
+    else:
+        add_eval_time_information(config_path, 0.0)
+    time.sleep(1)
 
     # HPO STEP ================================================================
     selected_config_path = config_path
@@ -514,61 +636,62 @@ async def main():
         except Exception as e:
             print(f"HPO failed: {e}. Falling back to base config.\n", flush=True)
 
-    time.sleep(2)
+    time.sleep(1)
 
 
     # FULL TRAINING RUN =========================================================
-    print("--- STARTING FULL TRAINING RUN ---\n", flush=True)
+    if DO_FULL_TRAINING:
+        print("--- STARTING FULL TRAINING RUN ---\n", flush=True)
 
-    # Start Training
-    path_to_train_file = "/workspace/training/train.py"
-    num_gpus = torch.cuda.device_count()
-    if num_gpus == 1:
-        training_command = [
-            "accelerate", "launch",
-            "--mixed_precision", "bf16",
-            "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
-            path_to_train_file,
-            "--config", str(selected_config_path),
-        ]
+        # Start Training
+        path_to_train_file = "/workspace/training/train.py"
+        num_gpus = torch.cuda.device_count()
+        if num_gpus == 1:
+            training_command = [
+                "accelerate", "launch",
+                "--mixed_precision", "bf16",
+                "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
+                path_to_train_file,
+                "--config", str(selected_config_path),
+            ]
 
-    else:
-        training_command = [
-            "accelerate", "launch",
-            "--multi_gpu",
-            "--mixed_precision", "bf16",
-            "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
-            path_to_train_file,
-            "--config", str(selected_config_path),
-        ]
-    try:
-        process = subprocess.Popen(
-            training_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
+        else:
+            training_command = [
+                "accelerate", "launch",
+                "--multi_gpu",
+                "--mixed_precision", "bf16",
+                "--num_processes", str(torch.cuda.device_count()),  # Explicit GPU count
+                path_to_train_file,
+                "--config", str(selected_config_path),
+            ]
+        try:
+            process = subprocess.Popen(
+                training_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
 
-        for line in process.stdout:
-            print(line, end="", flush=True)
+            for line in process.stdout:
+                print(line, end="", flush=True)
 
-        return_code = process.wait()
-        if return_code != 0:
-            raise subprocess.CalledProcessError(return_code, training_command)
+            return_code = process.wait()
+            if return_code != 0:
+                raise subprocess.CalledProcessError(return_code, training_command)
 
-        print("Training subprocess completed successfully.", flush=True)
+            print("Training subprocess completed successfully.", flush=True)
 
-    except subprocess.CalledProcessError as e:
-        print("Training subprocess failed!", flush=True)
-        print(f"Exit Code: {e.returncode}", flush=True)
-        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
-        raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
+        except subprocess.CalledProcessError as e:
+            print("Training subprocess failed!", flush=True)
+            print(f"Exit Code: {e.returncode}", flush=True)
+            print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
+            raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
 
-    WANDB_LOGS_DIR = "/cache/wandb_logs"
-    patch_wandb_symlinks(WANDB_LOGS_DIR)
-    patch_model_metadata(output_dir, args.model)
+        WANDB_LOGS_DIR = "/cache/wandb_logs"
+        patch_wandb_symlinks(WANDB_LOGS_DIR)
+        patch_model_metadata(output_dir, args.model)
 
 
 if __name__ == "__main__":

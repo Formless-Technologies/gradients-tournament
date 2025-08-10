@@ -12,22 +12,23 @@ def build_trainer_args(config: dict):
     lr_scheduler=SchedulerType.COSINE
 
     if config['steps_per_minute'] != 0.0:
-        # Calculate max steps based on steps_per_minute and required_finish_time
+        # Calculate max steps based on steps_per_minute, seconds_per_eval, and required_finish_time
         if config['rl'] == "sft":
-            MAX_STEP_EVAL_BUFFER = 0.9 # Assume 10% of time for sft eval steps
             TARGET_NUM_EVALS = 10
         elif config['rl'] == "dpo":
-            MAX_STEP_EVAL_BUFFER = 0.85 # Assume 15% of time for dpo eval steps
             TARGET_NUM_EVALS = 8
-        else:
-            MAX_STEP_EVAL_BUFFER = 0.75 # Assume 25% of time for grpo eval steps
+        elif config['rl'] == "grpo":
             TARGET_NUM_EVALS = 6
-        
+        else:
+            TARGET_NUM_EVALS = 10
+
         steps_per_minute = config['steps_per_minute']
-        time_remaining = datetime.fromisoformat(config['required_finish_time']) - datetime.now(timezone.utc)
+        seconds_per_eval = config['seconds_per_eval']
+        seconds_for_target_evals = math.ceil(TARGET_NUM_EVALS * seconds_per_eval)
+        time_remaining = datetime.fromisoformat(config['required_finish_time']) - datetime.now(timezone.utc) - timedelta(seconds=seconds_for_target_evals)
         minutes_remaining = max(0.0, time_remaining.total_seconds()) / 60
-        approx_max_steps = math.floor(steps_per_minute * minutes_remaining * MAX_STEP_EVAL_BUFFER)
-        approx_eval_steps = max(10, approx_max_steps // TARGET_NUM_EVALS)
+        approx_max_steps = math.floor(steps_per_minute * minutes_remaining)
+        approx_eval_steps = max(6, approx_max_steps // TARGET_NUM_EVALS)
         approx_save_steps = approx_eval_steps
         config['max_steps'] = approx_max_steps
         config['eval_steps'] = approx_eval_steps

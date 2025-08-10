@@ -349,7 +349,7 @@ def main():
         global MAX_TRIALS_TO_RUN
         global MAX_MINUTES_PER_TRIAL
         MAX_TRIALS_TO_RUN = 2
-        MAX_MINUTES_PER_TRIAL = 1
+        MAX_MINUTES_PER_TRIAL = 2
     
     try:
         best_params = run_optuna(args.config)
