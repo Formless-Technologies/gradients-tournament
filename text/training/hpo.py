@@ -15,7 +15,7 @@ import torch
 import psutil
 from contextlib import contextmanager
 
-TESTING = True
+TESTING = False
 
 MAX_TRIALS_TO_RUN = 10
 PERCENT_TIME_FOR_HPO = 0.25

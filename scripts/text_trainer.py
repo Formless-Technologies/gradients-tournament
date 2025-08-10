@@ -27,7 +27,7 @@ from configs.serverless_config_handler import setup_config, add_throughput_infor
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
-TESTING = True
+TESTING = False
 
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 30
@@ -465,8 +465,7 @@ async def main():
 
     # Build Config File
     config_path = f"/workspace/configs/{args.task_id}.yml"
-    config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time)
-
+    config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time, testing=TESTING)
 
 
 

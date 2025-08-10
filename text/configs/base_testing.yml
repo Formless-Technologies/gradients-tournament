@@ -1,0 +1,54 @@
+##### EDITABLE CONFIGS #####
+
+## Main Training Params
+optimizer: lion_8bit
+learning_rate: 2e-4
+gradient_accumulation_steps: 1
+micro_batch_size: 2
+eval_batch_size: 2
+weight_decay: 0.01
+gradient_checkpointing: true
+packing: true
+use_liger_kernel: true
+
+adapter: lora
+lora_r: 32
+lora_alpha: 64
+lora_dropout: 0.05
+lora_target_linear: true
+beta: 0.2
+use_neftune: true
+
+early_stopping: true
+early_stopping_patience: 3
+metric_for_best_model: eval_loss
+
+max_steps: 6000
+save_steps: 500
+eval_steps: 500
+warmup_ratio: 0.05
+logging_steps: 10
+save_total_limit: 3
+
+cleanlab: true               # turn filtering on/off
+cleanlab_keep_frac: 0.90    # keep top-92 % (empirically sweet spot)
+embed_model: sentence-transformers/all-MiniLM-L6-v2
+embed_batch: 128
+
+dataloader_num_workers: 4
+val_set_size: 0.05
+sequence_len: 8196
+
+##### AUTOSET PARAMS #####
+task_id:
+rl:
+sft_pretrain: false
+model_params_count: 0
+steps_per_minute: 0.0
+main_training_run: true
+datasets:
+output_dir: training_output
+
+
+
+

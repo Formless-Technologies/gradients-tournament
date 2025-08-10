@@ -93,8 +93,9 @@ def create_dataset_entry(
 
 def _process_grpo_dataset_fields(dataset_type: GrpoDatasetType) -> dict:
     field_prompt = dataset_type.field_prompt
+    extra_column = dataset_type.extra_column
 
-    full_template_config = {"field_prompt": field_prompt}
+    full_template_config = {"field_prompt": field_prompt, "extra_column": extra_column}
 
     return full_template_config
 
@@ -225,10 +226,15 @@ def setup_config(
     dataset_type: TextDatasetType,
     task_id: str,
     expected_repo_name: str | None,
-    required_finish_time: str | None
+    required_finish_time: str | None,
+    testing: bool | None
 ):
-    with open("/workspace/configs/base.yml", "r") as file:
-        config = yaml.safe_load(file)
+    if testing:
+        with open("/workspace/configs/base_testing.yml", "r") as file:
+            config = yaml.safe_load(file)
+    else:
+        with open("/workspace/configs/base.yml", "r") as file:
+            config = yaml.safe_load(file)
     
     # Useful config
     config['task_id'] = task_id
