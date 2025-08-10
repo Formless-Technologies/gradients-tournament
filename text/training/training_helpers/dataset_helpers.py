@@ -154,6 +154,11 @@ def load_grpo_datasets(config: dict):
         config["datasets"][0]["field_prompt"]:   "prompt",
     })
 
+    if config["datasets"][0]["extra_column"] is not None:
+        ds_train = ds_train.rename_columns({
+            config["datasets"][0]["extra_column"]:   "extra_data",
+        })
+
     orig_len = len(ds_train)
     _seen = set()                                           # lives outside the lambdas
 

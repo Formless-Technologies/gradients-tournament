@@ -60,6 +60,7 @@ class InstructTextDatasetType(BaseModel):
 class GrpoDatasetType(BaseModel):
     field_prompt: str | None = None
     reward_functions: list[RewardFunction] | None = []
+    extra_column: str | None = None
 
 class DpoDatasetType(BaseModel):
     field_prompt: str | None = None

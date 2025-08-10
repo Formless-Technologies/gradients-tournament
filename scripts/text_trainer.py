@@ -27,7 +27,7 @@ from configs.serverless_config_handler import setup_config, add_throughput_infor
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
-TESTING = False
+TESTING = True
 
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 30
@@ -37,11 +37,11 @@ DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5
 
 if TESTING:
-    DO_SFT_PRETRAIN = False
+    DO_SFT_PRETRAIN = True
     SFT_PRETRAIN_TIME = 1
     DO_THROUGHPUT_PROBE = True
     THROUGHPUT_PROBE_TIME = 1
-    DO_HPO = False
+    DO_HPO = True
 
 def cleanup_resources():
     """
