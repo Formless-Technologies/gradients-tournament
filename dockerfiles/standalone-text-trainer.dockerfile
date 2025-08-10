@@ -1,4 +1,4 @@
-FROM phoenixbeaudry/finetuning:v0.0.1
+FROM phoenixbeaudry/finetuning:v0.0.2
 
 ARG DEBIAN_FRONTEND=noninteractive
 

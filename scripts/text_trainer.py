@@ -341,16 +341,11 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 
     with open(base_config_path, "r") as f:
         base_cfg = yaml.safe_load(f)
 
-    if base_cfg.get("rl") not in ("dpo", "grpo"):
-        print("SFT pretrain skipped: base config is not DPO.", flush=True)
-        return None
-
     # Build SFT config derivative
     sft_cfg = dict(base_cfg)
 
     # Compute short time budget via required_finish_time
-    now = datetime.now(timezone.utc)
-    sft_cfg["required_finish_time"] = (now + timedelta(minutes=max(1, int(minutes)))).isoformat()
+    sft_cfg["required_finish_time"] = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
 
     # Training caps for a short warmup
     sft_cfg["max_steps"] = int(max_steps)
@@ -363,7 +358,7 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 
 
     # set a reasonable LR for SFT
     sft_cfg["sft_pretrain"] = True
-    sft_cfg["learning_rate"] = 1e-4
+    sft_cfg["learning_rate"] = 6e-4
 
     # Separate output dir to avoid interfering with main run
     base_out = "/app/checkpoints"

@@ -192,7 +192,6 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
 
     no_flash_attention_architectures = [
         "phi3forcausallm",
-        "phiforcausallm",
         "falconforcausallm"
     ]
     if config['model_architecture'] in no_flash_attention_architectures:

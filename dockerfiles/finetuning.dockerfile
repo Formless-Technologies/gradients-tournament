@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-devel
+FROM pytorch/pytorch:2.8.0-cuda12.9-cudnn9-devel
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -37,7 +37,7 @@ RUN pip install -U --no-cache-dir \
     mlflow \
     protobuf
 
-# Install Flash Attention 2 (much faster than flash-attn v1)
+# Install Flash Attention
 RUN pip install --no-cache-dir flash-attn --no-build-isolation
 
 # Install Triton for kernel compilation
