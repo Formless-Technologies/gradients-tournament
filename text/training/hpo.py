@@ -4,7 +4,7 @@ hpo_optuna.py  –  1‑hour Optuna sweep → full training (multi‑GPU compati
 --------------------------------------------------------------------------
 """
 from __future__ import annotations
-import argparse, copy, json, os, re, shutil, subprocess, tempfile, uuid, time
+import argparse, copy, json, os, re, shutil, subprocess, tempfile, uuid, time, signal
 from pathlib import Path
 import yaml, optuna
 from datetime import datetime, timedelta, timezone
@@ -16,9 +16,9 @@ import psutil
 from contextlib import contextmanager
 
 
-MAX_TRIALS_TO_RUN = 10
+MAX_TRIALS_TO_RUN = 25
 PERCENT_TIME_FOR_HPO = 0.25
-MAX_MINUTES_PER_TRIAL = 15
+MAX_MINUTES_PER_TRIAL = 6
 GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 
@@ -26,7 +26,7 @@ GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 def sample_space(trial: optuna.Trial, cfg: dict) -> dict:
     # Invariant Params
     params = {
-        "optimizer": trial.suggest_categorical("optimizer", ["lion_8bit"]),
+        "optimizer": trial.suggest_categorical("optimizer", ["lion_8bit", "adamw_bnb_8bit", "paged_adamw_8bit"]),
     }
 
     # SFT Params
@@ -164,13 +164,15 @@ def objective(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            bufsize=1,
+            preexec_fn=os.setsid
         )
 
         # Capture stdout, stream metrics, and report to Optuna for pruning
         stdout_lines = []
         eval_counter = 0
         max_rungs = 10
+        pruned = False
         for line in process.stdout:
             print(line, end="", flush=True)
             stdout_lines.append(line)
@@ -185,35 +187,31 @@ def objective(
 
                 eval_counter += 1
                 # Report rung index as resource step for Hyperband
-                try:
-                    print(f"Reporting Eval Loss to Optuna: {eval_loss}\n")
-                    trial.report(eval_loss, step=eval_counter)
-                except Exception as _e:
-                    print(f"Optuna report failed at rung {eval_counter}: {_e}\n")
-
+                trial.report(eval_loss, step=eval_counter)
+                
                 # Check if we should prune
                 try:
                     if trial.should_prune():
-                        print(f"Pruning trial {trial.number} at rung {eval_counter} (eval_loss={eval_loss})\n")
+                        pruned = True
+                        # Kill process group to ensure all children are gone
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                         try:
-                            process.terminate()
-                            try:
-                                process.wait(timeout=10)
-                            except Exception:
-                                process.kill()
-                        finally:
-                            cleanup_resources()
-                        raise optuna.exceptions.TrialPruned(
-                            f"Pruned at rung {eval_counter} with eval_loss={eval_loss}\n"
-                        )
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                        break
                 except Exception as _e:
-                    print(f"Optuna prune check failed at rung {eval_counter}: {_e}\n")
+                    print(f"Optuna pruning failed: {_e}\n")
+
+        if pruned:
+            process.stdout.close()
+            raise optuna.exceptions.TrialPruned(
+                f"Pruned at rung {eval_counter} with eval_loss={eval_loss}"
+            )
 
         return_code = process.wait()
         if return_code != 0:
             raise subprocess.CalledProcessError(return_code, training_command)
-
-        print("Training subprocess completed successfully.", flush=True)
         
         # Extract eval_loss from captured stdout
         full_stdout = "".join(stdout_lines)
@@ -227,18 +225,6 @@ def objective(
         return eval_loss
 
     except subprocess.CalledProcessError as e:
-        print("Training subprocess failed!", flush=True)
-        print(f"Exit Code: {e.returncode}\n", flush=True)
-        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}\n", flush=True)
-        try:
-            tail_lines = stdout_lines[-10:] if 'stdout_lines' in locals() and stdout_lines else []
-            if tail_lines:
-                print("Last 10 lines of subprocess output:", flush=True)
-                print("".join(tail_lines), end="", flush=True)
-            else:
-                print("No captured subprocess output available.", flush=True)
-        except Exception as tail_err:
-            print(f"Failed to print subprocess tail: {tail_err}", flush=True)
         raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
 
 # ╰──────────────────────────────────────────────────────────────────────────╯
@@ -348,7 +334,7 @@ def main():
     if base_cfg['testing']:
         global MAX_TRIALS_TO_RUN
         global MAX_MINUTES_PER_TRIAL
-        MAX_TRIALS_TO_RUN = 2
+        MAX_TRIALS_TO_RUN = 5
         MAX_MINUTES_PER_TRIAL = 2
     
     try:

@@ -84,9 +84,12 @@ def build_trainer_args(config: dict):
         type_spec_args = {
             'greater_is_better': False,
             'packing': config['packing'],
-            'eval_packing': config['packing'],
-            'neftune_noise_alpha': 5 
+            'eval_packing': config['packing']
         }
+        if config['use_neftune']:
+            type_spec_args |= {
+                'neftune_noise_alpha': 5 
+            }
     elif config['rl'] == "dpo":
         type_spec_args = {
             'beta': float(config['beta']),

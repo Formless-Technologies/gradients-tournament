@@ -119,7 +119,7 @@ def patch_model_metadata(output_dir: str, base_model_id: str):
         print(f"Error updating metadata: {e}", flush=True)
         pass
 
-def run_sft_pretrain(base_config_path: str, minutes: int = 15, max_steps: int = 1000) -> str | None:
+def run_sft_pretrain(base_config_path: str, minutes: int = 15) -> str | None:
     """
     Run a short SFT pretraining pass when the primary task is DPO.
 
@@ -581,7 +581,7 @@ async def main():
         DO_EVAL_PROBE = True
         EVAL_PROBE_TIME = 1
         DO_HPO = True
-        DO_FULL_TRAINING = False
+        DO_FULL_TRAINING = True
     
     # Setup Datasets
     try:
@@ -614,7 +614,6 @@ async def main():
     config = setup_config(dataset_path, args.model, dataset_type, args.task_id, args.expected_repo_name, required_finish_time, testing=args.testing)
 
 
-
     # SFT PRETRAINING STEP FOR DPO ==========================================
     if config['rl'] == "dpo" and DO_SFT_PRETRAIN:
         try:
@@ -623,6 +622,7 @@ async def main():
         except Exception as e:
             print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
     time.sleep(1)
+
 
     # THROUGHPUT PROBE =======================================================
     if DO_THROUGHPUT_PROBE:
@@ -643,6 +643,7 @@ async def main():
         add_throughput_information(config_path, 0.0)
     time.sleep(1)
 
+
     # EVAL PROBE =======================================================
     if DO_EVAL_PROBE:
         # Run eval probe to determine our eval time
@@ -661,6 +662,7 @@ async def main():
     else:
         add_eval_time_information(config_path, 0.0)
     time.sleep(1)
+
 
     # HPO STEP ================================================================
     selected_config_path = config_path
