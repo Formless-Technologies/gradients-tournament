@@ -17,6 +17,7 @@ import yaml
 import re
 import gc
 import time
+import math
 import psutil
 from transformers import AutoTokenizer
 from datetime import datetime, timedelta, timezone
@@ -29,7 +30,8 @@ from configs.serverless_config_handler import InstructTextDatasetType, DpoDatase
 
 DO_FULL_TRAINING = True
 DO_SFT_PRETRAIN = True
-SFT_PRETRAIN_TIME = 40
+SFT_PRETRAIN_TIME = 0
+PERCENT_TIME_FOR_PRETRAIN = 0.2
 DO_THROUGHPUT_PROBE = True
 THROUGHPUT_PROBE_TIME = 3
 DO_EVAL_PROBE = True
@@ -131,6 +133,8 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15) -> str | None:
     Returns:
       Path to the final saved model
     """
+
+    print(f"Running SFT Pretrain for {minutes}m...")
     # Load the existing (DPO) config
     with open(base_config_path, "r") as f:
         base_cfg = yaml.safe_load(f)
@@ -616,8 +620,15 @@ async def main():
 
     # SFT PRETRAINING STEP FOR DPO ==========================================
     if config['rl'] == "dpo" and DO_SFT_PRETRAIN:
+        # Calculate time budget
+        if SFT_PRETRAIN_TIME == 0:
+            time_remaining = required_finish_time_dt - datetime.now(timezone.utc)
+            seconds_remaining = max(0.0, time_remaining.total_seconds() * PERCENT_TIME_FOR_PRETRAIN)
+            minutes_for_pretrain = math.floor(seconds_remaining/60)
+        else:
+            minutes_for_pretrain = SFT_PRETRAIN_TIME
         try:
-            new_model_location = run_sft_pretrain(config_path, minutes=SFT_PRETRAIN_TIME)
+            new_model_location = run_sft_pretrain(config_path, minutes=minutes_for_pretrain)
             modify_model_location(config_path, new_model_location)
         except Exception as e:
             print(f"SFT pretrain encountered an error and will be skipped: {e}", flush=True)
