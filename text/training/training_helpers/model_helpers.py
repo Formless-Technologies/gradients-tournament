@@ -6,8 +6,10 @@ from accelerate import PartialState
 
 def load_model(model_name: str, config: dict) -> AutoModelForCausalLM:
 
-    if config["use_flash_attn"]:
+    if config["attention_type"] == "flash":
         model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16, attn_implementation="flash_attention_2")
+    elif config["attention_type"] == "eager":
+        model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16, attn_implementation="eager")
     else:
         model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True, torch_dtype=torch.bfloat16)
     model.train()

@@ -196,10 +196,22 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
         "phi3forcausallm",
         "falconforcausallm"
     ]
+
+    eager_attention_architectures = [
+        "gemmaforcausallm",
+        "gemma2forcausallm"
+    ]
+
     if config['model_architecture'] in no_flash_attention_architectures:
-        config["use_flash_attn"] = False
+        config["attention_type"] = "none"
+
+    elif config['model_architecture'] in eager_attention_architectures:
+        config["attention_type"] = "eager"
+
     else:
-        config["use_flash_attn"] = True
+        config["attention_type"] = "flash"
+
+    
         
     return config
 

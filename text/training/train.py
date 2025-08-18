@@ -145,7 +145,7 @@ def run_training(config_path: str) -> None:
     print(f"Optimizer: {config['optimizer']}")
     print(f"Learning Rate: {config['learning_rate']}")
     print(f"Model Architecture: {config['model_architecture']}")
-    print(f"Flash Attention Enabled: {config['use_flash_attn']}")
+    print(f"Attention Type: {config['attention_type']}")
     print(f"Output Directory: {config['output_dir']}")
 
     if config["eval_probe_run"]:
