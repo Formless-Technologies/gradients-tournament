@@ -14,13 +14,13 @@ def build_trainer_args(config: dict):
     if config['steps_per_minute'] != 0.0:
         # Calculate max steps based on steps_per_minute, seconds_per_eval, and required_finish_time
         if config['rl'] == "sft":
-            TARGET_NUM_EVALS = 10
-        elif config['rl'] == "dpo":
-            TARGET_NUM_EVALS = 8
-        elif config['rl'] == "grpo":
             TARGET_NUM_EVALS = 6
+        elif config['rl'] == "dpo":
+            TARGET_NUM_EVALS = 4
+        elif config['rl'] == "grpo":
+            TARGET_NUM_EVALS = 2
         else:
-            TARGET_NUM_EVALS = 10
+            TARGET_NUM_EVALS = 4
 
         steps_per_minute = config['steps_per_minute']
         seconds_per_eval = config['seconds_per_eval']

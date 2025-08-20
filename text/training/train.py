@@ -115,13 +115,17 @@ def run_training(config_path: str) -> None:
     tokenizer = load_tokenizer(config['base_model'], config)
 
     if config['sft_pretrain']:
+        print("Loading and Modifying SFT Pretrain Dataset")
         train_dataset, eval_dataset = load_sft_pretrain_datasets(config)
         config['rl'] = "sft"
     elif config['rl'] == "sft":
+        print("Loading SFT Dataset")
         train_dataset, eval_dataset = load_sft_datasets(config)
     elif config['rl'] == "dpo":
+        print("Loading DPO Dataset")
         train_dataset, eval_dataset = load_dpo_datasets(config)
     elif config['rl'] == "grpo":
+        print("Loading GRPO Dataset")
         train_dataset, eval_dataset = load_grpo_datasets(config)
         
 

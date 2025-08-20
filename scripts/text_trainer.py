@@ -236,9 +236,12 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15) -> str | None:
             print(line, end="", flush=True)
         rc = proc.wait()
         if rc != 0:
-            print(f"SFT pretrain exited with code {rc} (continuing).", flush=True)
+            # Raise so the caller can decide how to handle pretrain failure
+            raise subprocess.CalledProcessError(rc, cmd)
     except Exception as e:
         print(f"SFT pretrain failed: {e}", flush=True)
+        # Bubble up to the caller
+        raise
     finally:
         try:
             if proc and proc.poll() is None:
@@ -414,7 +417,7 @@ def run_throughput_probe(base_config_path: str, minutes: int = 5):
         steps_per_minute = 0.0
 
     if return_code != 0:
-        print(f"Probe subprocess exited with code {return_code} (continuing with collected metrics).", flush=True)
+        raise subprocess.CalledProcessError(return_code, training_command)
 
     return steps_per_minute
 
@@ -514,7 +517,7 @@ def run_eval_probe(base_config_path: str, minutes: int = 5):
         time.sleep(GPU_CLEANUP_WAIT_TIME)
 
     if return_code != 0:
-        print(f"Probe subprocess exited with code {return_code} (continuing with collected metrics).", flush=True)
+        raise subprocess.CalledProcessError(return_code, training_command)
 
     return eval_runtime
 

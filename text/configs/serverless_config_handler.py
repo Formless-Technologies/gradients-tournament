@@ -187,11 +187,6 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
         "gemmaforcausallm",
     ]
 
-    if config['model_architecture'] in liger_model_architectures:
-        config["use_liger_kernel"] = True
-    else:
-        config["use_liger_kernel"] = False
-
     no_flash_attention_architectures = [
         "phi3forcausallm",
         "falconforcausallm"
@@ -201,6 +196,11 @@ def update_model_info(config: dict, model: str, task_id: str = "", expected_repo
         "gemmaforcausallm",
         "gemma2forcausallm"
     ]
+
+    if config['model_architecture'] in liger_model_architectures:
+        config["use_liger_kernel"] = True
+    else:
+        config["use_liger_kernel"] = False
 
     if config['model_architecture'] in no_flash_attention_architectures:
         config["attention_type"] = "none"
