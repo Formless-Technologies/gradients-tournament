@@ -28,14 +28,16 @@ from configs.serverless_config_handler import setup_config, add_throughput_infor
 from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
+
+TIME_LIMIT_LEEWAY = 20
 DO_FULL_TRAINING = True
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 0
 PERCENT_TIME_FOR_PRETRAIN = 0.2
 DO_THROUGHPUT_PROBE = True
-THROUGHPUT_PROBE_TIME = 3
+THROUGHPUT_PROBE_TIME = 7
 DO_EVAL_PROBE = True
-EVAL_PROBE_TIME = 10
+EVAL_PROBE_TIME = 20
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5
 
@@ -610,7 +612,7 @@ async def main():
         os.makedirs(output_dir, exist_ok=True)
 
     # Calculate required finish time
-    required_finish_time_dt  = datetime.now(timezone.utc) + timedelta(hours=int(args.hours_to_complete)) - timedelta(minutes=15) # Add 15 minute leeway for docker build and setup
+    required_finish_time_dt  = datetime.now(timezone.utc) + timedelta(hours=int(args.hours_to_complete)) - timedelta(minutes=TIME_LIMIT_LEEWAY) # Add leeway for docker build and setup
     required_finish_time = required_finish_time_dt.isoformat()
 
     # Build Config File
