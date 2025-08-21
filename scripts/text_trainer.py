@@ -682,7 +682,7 @@ async def main():
 
     # HPO STEP ================================================================
     selected_config_path = config_path
-    if DO_HPO:
+    if DO_HPO and not config['rl'] == "grpo":
         # Try HPO; if it succeeds and produces a _best.yml, use it; otherwise fall back to base.
         print("--- STARTING HPO PIPELINE ---\n", flush=True)
         try:
