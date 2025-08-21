@@ -75,6 +75,7 @@ def build_trainer_args(config: dict):
 
         # Misc Args
         'output_dir': config['output_dir'],
+        'ddp_find_unused_parameters': False,
         'report_to': "wandb"
     }
 
