@@ -1,7 +1,7 @@
 #!/bin/bash
-TASK_ID="af6d4131-4c12-480c-a041-75a23192581b"
-MODEL="furiosa-ai/mlperf-gpt-j-6b"
-DATASET="https://gradients.s3.eu-north-1.amazonaws.com/b8582b5e0716b68b_train_data.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVVZOOA7SA4UOFLPI%2F20250820%2Feu-north-1%2Fs3%2Faws4_request&X-Amz-Date=20250820T134140Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=5d7e41465af71ac91b65df533e808a767adea2640ee645ad349fa032b38d98e2"
+TASK_ID="908181eb-b95d-4fea-9a5c-981182e2c0ee"
+MODEL="NousResearch/Nous-Hermes-llama-2-7b"
+DATASET="https://gradients.s3.eu-north-1.amazonaws.com/57e242f2bb0795a7_train_data.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVVZOOA7SA4UOFLPI%2F20250821%2Feu-north-1%2Fs3%2Faws4_request&X-Amz-Date=20250821T203358Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=09cc60d55468d96bd483d2e9cd6191520196834ac312d826427cefbe94f84024"
 DATASET_TYPE='{
   "field_prompt":"prompt",
   "field_chosen":"chosen",
@@ -11,7 +11,7 @@ DATASET_TYPE='{
   "rejected_format":"{rejected}"
 }'
 FILE_FORMAT="s3"
-HOURS_TO_COMPLETE=8
+HOURS_TO_COMPLETE=6
 
 # Optional: Repository name for the trained model (just the model name, not username/model-name)
 EXPECTED_REPO_NAME="my-finetuned-model"

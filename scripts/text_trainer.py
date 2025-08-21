@@ -585,11 +585,11 @@ async def main():
         global DO_FULL_TRAINING
         DO_SFT_PRETRAIN = True
         SFT_PRETRAIN_TIME = 2
-        DO_THROUGHPUT_PROBE = True
+        DO_THROUGHPUT_PROBE = False
         THROUGHPUT_PROBE_TIME = 1
-        DO_EVAL_PROBE = True
+        DO_EVAL_PROBE = False
         EVAL_PROBE_TIME = 1
-        DO_HPO = True
+        DO_HPO = False
         DO_FULL_TRAINING = True
     
     # Setup Datasets

@@ -4,7 +4,8 @@ import argparse
 import yaml
 from datetime import datetime, timedelta, timezone
 import torch
-from transformers import EarlyStoppingCallback
+import math
+from transformers import EarlyStoppingCallback, GenerationConfig
 from trl import (
     SFTConfig,
     SFTTrainer,
@@ -33,6 +34,70 @@ def parse_args():
 def load_config(path: str) -> dict:
     with open(path, 'r') as f:
         return yaml.safe_load(f)
+
+
+def sanitize_generation_config(model):
+    """
+    Build a valid GenerationConfig for `model` and attach it to avoid save-time validation errors.
+    - Drops sampling-only keys when do_sample is False (e.g., temperature, top_p, top_k, typical_p, etc.)
+    - Removes None/NaN/Inf values
+    - Keeps only keys allowed by the model's base GenerationConfig
+    """
+    if model is None:
+        return
+    try:
+        base_gen_cfg = GenerationConfig.from_model_config(model.config)
+        allowed = set(base_gen_cfg.to_dict().keys())
+        gen_cfg = getattr(model, "generation_config", None)
+
+        if gen_cfg is None or not hasattr(gen_cfg, "to_dict"):
+            clean = base_gen_cfg.to_dict()
+        else:
+            raw = gen_cfg.to_dict()
+
+            def is_bad_number(v):
+                if v is None:
+                    return True
+                try:
+                    fv = float(v)
+                    return math.isnan(fv) or math.isinf(fv)
+                except Exception:
+                    return False
+
+            clean = {k: v for k, v in raw.items() if k in allowed and not is_bad_number(v)}
+
+        # Honor greedy decoding defaults: remove sampling keys if do_sample is False
+        do_sample = bool(clean.get("do_sample", False))
+        if not do_sample:
+            for k in [
+                "temperature",
+                "top_p",
+                "top_k",
+                "typical_p",
+                "top_a",
+                "epsilon_cutoff",
+                "eta_cutoff",
+                "diversity_penalty",
+                "penalty_alpha",
+            ]:
+                if k in clean:
+                    del clean[k]
+
+        # Keep repetition_penalty sane if present
+        if "repetition_penalty" in clean:
+            try:
+                rp = float(clean["repetition_penalty"])
+                if rp <= 0 or math.isnan(rp) or math.isinf(rp):
+                    clean["repetition_penalty"] = 1.0
+            except Exception:
+                clean["repetition_penalty"] = 1.0
+
+        model.generation_config = GenerationConfig(**clean)
+        if hasattr(model.generation_config, "validate"):
+            model.generation_config.validate()
+    except Exception as ge:
+        print(f"Warning: resetting invalid generation config to defaults due to: {ge}")
+        model.generation_config = GenerationConfig.from_model_config(model.config)
 
 
 def build_trainer(config: dict, model, peft_config, tokenizer, train_ds, eval_ds):
@@ -165,6 +230,10 @@ def run_training(config_path: str) -> None:
             if model_obj is not None and hasattr(model_obj, "merge_and_unload"):
                 print(f"Saving Final Model To: {config['output_dir']}")
                 merged = model_obj.merge_and_unload()
+
+                # Sanitize GenerationConfig before saving to avoid HF validation errors
+                sanitize_generation_config(merged)
+
                 merged.save_pretrained(config['output_dir'])
                 tokenizer.save_pretrained(config['output_dir'])
             else:
@@ -172,11 +241,15 @@ def run_training(config_path: str) -> None:
                 trainer.save_model(config['output_dir'])
                 tokenizer.save_pretrained(config['output_dir'])
         except Exception as e:
-            print(f"Merge-and-unload save failed; falling back to trainer.save_model(): {e}")
-            trainer.save_model(config['output_dir'])
-            tokenizer.save_pretrained(config['output_dir'])
+            print(f"Merge-and-unload save failed; {e}")
+            raise
     elif config['main_training_run']:
         print(f"Saving Final Model To: {config['output_dir']}")
+        try:
+            if hasattr(trainer, "model") and trainer.model is not None:
+                sanitize_generation_config(trainer.model)
+        except Exception as _:
+            pass
         trainer.save_model(config['output_dir'])
         tokenizer.save_pretrained(config['output_dir'])
 
