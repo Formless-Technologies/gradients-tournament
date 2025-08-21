@@ -228,7 +228,7 @@ def run_training(config_path: str) -> None:
         model_obj = getattr(trainer, "model", None)
         try:
             if model_obj is not None and hasattr(model_obj, "merge_and_unload"):
-                print(f"Saving Final Model To: {config['output_dir']}")
+                print(f"Saving Final Merged Model To: {config['output_dir']}")
                 merged = model_obj.merge_and_unload()
 
                 # Sanitize GenerationConfig before saving to avoid HF validation errors
@@ -237,9 +237,7 @@ def run_training(config_path: str) -> None:
                 merged.save_pretrained(config['output_dir'])
                 tokenizer.save_pretrained(config['output_dir'])
             else:
-                print(f"Saving Final Model To: {config['output_dir']}")
-                trainer.save_model(config['output_dir'])
-                tokenizer.save_pretrained(config['output_dir'])
+                raise RuntimeError("Model does not support merge_and_unload; cannot save merged SFT-pretrain model")
         except Exception as e:
             print(f"Merge-and-unload save failed; {e}")
             raise
