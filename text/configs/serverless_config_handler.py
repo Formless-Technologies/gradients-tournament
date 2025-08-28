@@ -278,7 +278,7 @@ def setup_config(
     # GRPO
     elif isinstance(dataset_type, GrpoDatasetType):
         config['rl'] = "grpo"
-        config['learning_rate'] = 5e-6
+        config['learning_rate'] = 6e-5
         filename, reward_funcs_names = create_reward_funcs_file(
             [reward_function.reward_func for reward_function in dataset_type.reward_functions], task_id
         )
