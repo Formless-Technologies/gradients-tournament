@@ -80,7 +80,7 @@ def patch_wandb_symlinks(base_dir: str):
                     else:
                         pathlib.Path(full_path).touch()
                 except Exception as e:
-                    print(f"Symlink patch failed: {e}")
+                    print(f"Symlink patch failed: {e}", flush=True)
 
 def patch_model_metadata(output_dir: str, base_model_id: str):
     try:
@@ -136,7 +136,7 @@ def run_sft_pretrain(base_config_path: str, minutes: int = 15) -> str | None:
       Path to the final saved model
     """
 
-    print(f"Running SFT Pretrain for {minutes}m...")
+    print(f"Running SFT Pretrain for {minutes}m...", flush=True)
     # Load the existing (DPO) config
     with open(base_config_path, "r") as f:
         base_cfg = yaml.safe_load(f)
