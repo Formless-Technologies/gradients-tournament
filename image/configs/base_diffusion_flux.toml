@@ -43,7 +43,7 @@ no_metadata = true
 noise_offset_type = "Multires"
 multires_noise_iterations = 6
 multires_noise_discount = 0.3                                                                                                                                               
-optimizer_args = [ "scale_parameter=False", "relative_step=False", "warmup_init=False", "weight_decay=0.01",]                                                                  
+optimizer_args = ["weight_decay=0.01", "betas=(0.9,0.99)"]                                                                  
 optimizer_type = "Lion"                                                                                                                                                   
 output_dir = "/app/outputs"                                                                                                                                          
 output_name = "last"                                                                                                                                                 
