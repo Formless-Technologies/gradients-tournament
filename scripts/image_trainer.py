@@ -49,52 +49,29 @@ def get_available_vram_gb() -> float:
     return 12.0
 
 
-def parse_resolution(reso: str) -> tuple[int, int]:
-    try:
-        w, h = reso.split(",")
-        return int(w.strip()), int(h.strip())
-    except Exception:
-        return (1024, 1024)
-
-
-def choose_batch_settings(vram_gb: float, resolution: tuple[int, int], model_type: str) -> tuple[int, int]:
+def choose_batch_settings(vram_gb: float, model_type: str) -> tuple[int, int]:
     """Heuristic mapping from VRAM and resolution to (train_batch_size, gradient_accumulation_steps)."""
-    max_dim = max(resolution)
     if vram_gb >= 39:
-        bs = 48
-    elif vram_gb >= 23:
-        bs = 32
-    elif vram_gb >= 15:
-        bs = 24
-    elif vram_gb >= 11:
         bs = 16
-    elif vram_gb >= 9:
+    elif vram_gb >= 23:
         bs = 8
-    else:
+    elif vram_gb >= 15:
+        bs = 4
+    elif vram_gb >= 11:
         bs = 2
-
-    if max_dim > 1024:
-        bs = max(1, bs - 1)
+    elif vram_gb >= 9:
+        bs = 1
+    else:
+        bs = 1
 
     return int(bs), 1
 
 
 def adjust_config_for_memory(config: dict, model_type: str, vram_gb: float) -> dict:
     """Mutate config with VRAM-aware settings; return the config."""
-    reso_str = config.get("resolution", "1024,1024")
-    reso = parse_resolution(reso_str)
-    bs, gas = choose_batch_settings(vram_gb, reso, model_type)
+    bs, gas = choose_batch_settings(vram_gb, model_type)
     config["train_batch_size"] = int(bs)
     config["gradient_accumulation_steps"] = int(gas)
-
-    # Low-VRAM resolution/bucket fallbacks
-    if vram_gb < 10:
-        config["resolution"] = "768,768"
-        config["max_bucket_reso"] = min(int(config.get("max_bucket_reso", 1024)), 1024)
-        config["bucket_reso_steps"] = min(int(config.get("bucket_reso_steps", 64)), 32)
-    if vram_gb < 8:
-        config["resolution"] = "640,640"
-        config["max_bucket_reso"] = min(int(config.get("max_bucket_reso", 896)), 896)
 
     return config
 
@@ -203,8 +180,7 @@ def create_config(task_id, model, model_type, expected_repo_name):
     print(f"[auto-config] Detected VRAM ≈ {vram_gb} GB", flush=True)
     config = adjust_config_for_memory(config, model_type, vram_gb)
     print(f"[auto-config] Using train_batch_size={config.get('train_batch_size')} "
-          f"gradient_accumulation_steps={config.get('gradient_accumulation_steps')} "
-          f"resolution={config.get('resolution')} max_bucket_reso={config.get('max_bucket_reso')}", flush=True)
+          f"gradient_accumulation_steps={config.get('gradient_accumulation_steps')} ", flush=True)
 
     # Save config to file
     config_path = os.path.join(train_cst.IMAGE_CONTAINER_CONFIG_SAVE_PATH, f"{task_id}.toml")
@@ -216,21 +192,36 @@ def create_config(task_id, model, model_type, expected_repo_name):
 def run_training(model_type, config_path):
     print(f"Starting training with config: {config_path}", flush=True)
 
-    max_retries = 3
+    max_retries = 4
     attempt = 0
 
     while attempt <= max_retries:
-        training_command = [
-            "accelerate", "launch",
-            "--dynamo_backend", "no",
-            "--dynamo_mode", "default",
-            "--mixed_precision", "bf16",
-            "--num_processes", "1",
-            "--num_machines", "1",
-            "--num_cpu_threads_per_process", "2",
-            f"/app/sd-scripts/{model_type}_train_network.py",
-            "--config_file", config_path
-        ]
+
+        if model_type == "sdxl":
+            training_command = [
+                "accelerate", "launch",
+                "--dynamo_backend", "no",
+                "--dynamo_mode", "default",
+                "--mixed_precision", "bf16",
+                "--num_processes", "1",
+                "--num_machines", "1",
+                "--num_cpu_threads_per_process", "8",
+                f"/app/sd-scripts/{model_type}_train_network.py",
+                "--network_train_unet_only",
+                "--config_file", config_path
+            ]
+        else:
+            training_command = [
+                "accelerate", "launch",
+                "--dynamo_backend", "no",
+                "--dynamo_mode", "default",
+                "--mixed_precision", "bf16",
+                "--num_processes", "1",
+                "--num_machines", "1",
+                "--num_cpu_threads_per_process", "8",
+                f"/app/sd-scripts/{model_type}_train_network.py",
+                "--config_file", config_path
+            ]
 
         try:
             print(f"Starting training subprocess (attempt {attempt + 1}/{max_retries + 1})...\n", flush=True)
@@ -274,22 +265,6 @@ def run_training(model_type, config_path):
                         new_gas = gas + 1
                         print(f"[retry {attempt}] Increasing gradient_accumulation_steps {gas} -> {new_gas}", flush=True)
                         cfg["gradient_accumulation_steps"] = new_gas
-                        # Step down resolution gradually
-                        reso = cfg.get("resolution", "1024,1024")
-                        w, h = parse_resolution(reso)
-                        if max(w, h) > 768:
-                            cfg["resolution"] = "768,768"
-                            cfg["max_bucket_reso"] = min(int(cfg.get("max_bucket_reso", 1024)), 1024)
-                            cfg["bucket_reso_steps"] = min(int(cfg.get("bucket_reso_steps", 64)), 32)
-                            print(f"[retry {attempt}] Reducing resolution to {cfg['resolution']} and max_bucket_reso={cfg['max_bucket_reso']}", flush=True)
-                        elif max(w, h) > 640:
-                            cfg["resolution"] = "640,640"
-                            cfg["max_bucket_reso"] = min(int(cfg.get("max_bucket_reso", 896)), 896)
-                            print(f"[retry {attempt}] Reducing resolution to {cfg['resolution']} and max_bucket_reso={cfg['max_bucket_reso']}", flush=True)
-                        else:
-                            cfg["resolution"] = "512,512"
-                            cfg["max_bucket_reso"] = min(int(cfg.get("max_bucket_reso", 768)), 768)
-                            print(f"[retry {attempt}] Reducing resolution to {cfg['resolution']} and max_bucket_reso={cfg['max_bucket_reso']}", flush=True)
                     return cfg
 
                 update_config_file_inplace(config_path, updater)
