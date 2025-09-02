@@ -64,7 +64,7 @@ def choose_batch_settings(vram_gb: float, model_type: str) -> tuple[int, int]:
     else:
         bs = 1
 
-    return int(bs), 1
+    return int(bs), 2
 
 
 def adjust_config_for_memory(config: dict, model_type: str, vram_gb: float) -> dict:

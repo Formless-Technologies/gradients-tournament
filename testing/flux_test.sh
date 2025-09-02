@@ -44,6 +44,7 @@ docker run --rm --gpus all \
   --security-opt=no-new-privileges \
   --cap-drop=ALL \
   --memory=32g \
+  --shm-size=8g \
   --cpus=8 \
   --volume "$CHECKPOINTS_DIR:/cache:rw" \
   --name image-trainer-example \
