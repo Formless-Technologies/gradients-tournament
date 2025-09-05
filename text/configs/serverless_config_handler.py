@@ -317,7 +317,6 @@ def setup_config(
         os.environ['WANDB_RUN_ID'] = f"{task_id}_{expected_repo_name}"
         os.environ['WANDB_NAME'] = f"{task_id}_{expected_repo_name}"
         os.environ['WANDB_MODE'] = "offline"
-        os.makedirs(WANDB_LOGS_DIR, exist_ok=True)
 
     # Setup output dir
     output_dir = f"/app/checkpoints/{task_id}/{expected_repo_name}"
