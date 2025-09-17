@@ -16,9 +16,9 @@ import psutil
 from contextlib import contextmanager
 
 
-MAX_TRIALS_TO_RUN = 25
-PERCENT_TIME_FOR_HPO = 0.25
-MAX_MINUTES_PER_TRIAL = 6
+MAX_TRIALS_TO_RUN = 10
+PERCENT_TIME_FOR_HPO = 0.15
+MAX_MINUTES_PER_TRIAL = 10
 GPU_CLEANUP_WAIT_TIME = 5  # seconds to wait for GPU cleanup
 
 

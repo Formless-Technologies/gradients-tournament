@@ -29,7 +29,7 @@ from configs.serverless_config_handler import TaskType, FileFormat
 from configs.serverless_config_handler import InstructTextDatasetType, DpoDatasetType, GrpoDatasetType
 
 
-TIME_LIMIT_LEEWAY = 20
+TIME_LIMIT_LEEWAY = 15
 DO_FULL_TRAINING = True
 DO_SFT_PRETRAIN = True
 SFT_PRETRAIN_TIME = 0
@@ -37,7 +37,7 @@ PERCENT_TIME_FOR_PRETRAIN = 0.2
 DO_THROUGHPUT_PROBE = True
 THROUGHPUT_PROBE_TIME = 8
 DO_EVAL_PROBE = True
-EVAL_PROBE_TIME = 45
+EVAL_PROBE_TIME = 30
 DO_HPO = True
 GPU_CLEANUP_WAIT_TIME = 5
 
